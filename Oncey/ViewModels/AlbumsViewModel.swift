@@ -5,34 +5,26 @@
 
 import Observation
 import Foundation
-import SwiftData
 
 @MainActor
 @Observable
 final class AlbumsViewModel {
-    private let seedDataService = SeedDataService()
+    func latestMoment(for album: Album) -> Moment? {
+        album.moments.max { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.updatedAt < rhs.updatedAt
+            }
 
-    var hasAttemptedSeed = false
-
-    func seedIfNeeded(in modelContext: ModelContext) {
-        guard !hasAttemptedSeed else {
-            return
-        }
-
-        hasAttemptedSeed = true
-
-        do {
-            try seedDataService.seedIfNeeded(in: modelContext)
-        } catch {
-            assertionFailure("Failed to seed sample data: \(error.localizedDescription)")
+            return lhs.createdAt < rhs.createdAt
         }
     }
 
     func coverPhotoPath(for album: Album) -> String? {
-        album.moments
-            .sorted { $0.createdAt > $1.createdAt }
-            .first?
-            .photo
+        latestMoment(for: album)?.photo
+    }
+
+    func layerCount(for album: Album) -> Int {
+        max(1, min(album.moments.count, 5))
     }
 
     func momentCountText(for album: Album) -> String {

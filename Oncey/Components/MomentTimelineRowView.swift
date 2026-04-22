@@ -10,6 +10,7 @@ struct MomentTimelineRowView: View {
     let timestampText: String
     let isFirst: Bool
     let isLast: Bool
+    let bottomSpacing: CGFloat
 
     var body: some View {
         HStack(alignment: .top, spacing: 18) {
@@ -28,6 +29,11 @@ struct MomentTimelineRowView: View {
                             .stroke(Color.primary.opacity(0.06), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.06), radius: 20, y: 8)
+
+                if bottomSpacing > 0 {
+                    Color.clear
+                        .frame(height: bottomSpacing)
+                }
             }
         }
     }
@@ -74,6 +80,6 @@ private struct TimelineRailView: View {
     let album = Album(name: "Timeline Preview")
     let moment = Moment(album: album, photo: "", location: "Berlin, Germany")
 
-    MomentTimelineRowView(moment: moment, timestampText: "Apr 18, 2026 at 7:05 PM", isFirst: true, isLast: false)
+    MomentTimelineRowView(moment: moment, timestampText: "Apr 18, 2026 at 7:05 PM", isFirst: true, isLast: false, bottomSpacing: 30)
         .padding()
 }

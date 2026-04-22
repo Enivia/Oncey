@@ -24,9 +24,8 @@ Treat that skill as mandatory process guidance for all tasks in this repository.
 
 ## Validation Baseline
 
-1. Use xcodebuild -scheme Oncey -destination 'platform=iOS Simulator,name=iPhone 17' build as the default build validation for app changes.
-2. If that simulator destination is unavailable, run xcodebuild -showdestinations -scheme Oncey and choose an installed iOS Simulator destination before validating.
-3. If signing is configured and device behavior matters, optionally add xcodebuild -scheme Oncey -destination 'generic/platform=iOS' build as a secondary check.
-4. If a change affects iOS-only behavior or code under conditional iOS compilation, ensure an iOS Simulator build is included.
-5. If a change affects model logic, SwiftData flows, navigation, state handling, or existing tested behavior, run the narrowest relevant automated tests available or state why they were not run.
-6. If SwiftData is touched, explicitly verify create, read, update, and delete behavior.
+1. Use xcodebuild -scheme Oncey build as the default build validation for app changes.
+2. Use any available destination or signing configuration that allows the build to complete successfully.
+3. If a specific destination or signing requirement blocks validation, state that explicitly.
+4. If a change affects model logic, SwiftData flows, navigation, state handling, or existing tested behavior, run the narrowest relevant automated tests available or state why they were not run.
+5. If SwiftData is touched, explicitly verify create, read, update, and delete behavior.

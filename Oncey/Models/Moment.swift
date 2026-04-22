@@ -12,6 +12,7 @@ final class Moment {
     var albumId: UUID
     var photo: String
     var location: String
+    var note: String
     var createdAt: Date
     var updatedAt: Date
     var album: Album?
@@ -21,6 +22,7 @@ final class Moment {
         album: Album,
         photo: String,
         location: String,
+        note: String = "",
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -28,6 +30,7 @@ final class Moment {
         self.albumId = album.id
         self.photo = photo
         self.location = location
+        self.note = note
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.album = album

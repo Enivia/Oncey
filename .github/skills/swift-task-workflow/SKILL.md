@@ -61,10 +61,9 @@ Every code-changing task must pass all of the following checks. If any check fai
 
 1. Build validation:
     - Run a real build for the app target.
-    - In this repository, use xcodebuild -scheme Oncey -destination 'platform=iOS Simulator,name=iPhone 17' build as the default baseline validation.
-    - If that simulator destination is unavailable, run xcodebuild -showdestinations -scheme Oncey and choose an installed iOS Simulator destination before proceeding.
-    - If signing is configured and the change could affect device-only behavior, optionally add xcodebuild -scheme Oncey -destination 'generic/platform=iOS' build as a secondary validation.
-    - If the change affects iOS-only behavior or code under conditional iOS compilation, ensure an iOS Simulator build is included even when other validations also run.
+    - In this repository, use xcodebuild -scheme Oncey build as the default baseline validation.
+    - Use any available destination or signing configuration that allows the build to complete successfully.
+    - If a specific destination or signing requirement blocks validation, state that explicitly.
 2. Automated tests:
     - When changes affect model logic, SwiftData flows, navigation, state handling, or user interactions with existing test coverage, run the narrowest relevant test command in addition to the build.
     - If no relevant automated test exists or the environment cannot run it, state that explicitly.

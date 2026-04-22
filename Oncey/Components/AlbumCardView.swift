@@ -9,18 +9,33 @@ struct AlbumCardView: View {
     let album: Album
     let coverPhotoPath: String?
     let momentCountText: String
+    let layerCount: Int
 
-    private let layerTransforms: [CardLayerTransform] = [
-        .init(x: -10, y: 12, angle: -2.0),
-        .init(x: 8, y: 10, angle: 1.5),
-        .init(x: -4, y: 4, angle: -1.0),
+    private static let layerTransforms: [CardLayerTransform] = [
+        .init(x: -10, y: 10, angle: -1.8),
+        .init(x: 8, y: 8, angle: 1.4),
+        .init(x: -5, y: 3, angle: -1.0),
+        .init(x: 6, y: 8, angle: 2.1),
+        .init(x: -8, y: 6, angle: -1.5),
     ]
+
+    private var displayedLayerCount: Int {
+        max(1, min(layerCount, 5))
+    }
+
+    private var backdropTransforms: [CardLayerTransform] {
+        Array(Self.layerTransforms.prefix(max(0, displayedLayerCount - 1)))
+    }
+
+    private var backdropBottomInset: CGFloat {
+        backdropTransforms.map(\ .y).max() ?? 0
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
-            ForEach(Array(layerTransforms.enumerated()), id: \.offset) { index, transform in
+            ForEach(Array(backdropTransforms.enumerated().reversed()), id: \.offset) { index, transform in
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.primary.opacity(0.05 - Double(index) * 0.01))
+                    .fill(Color.primary.opacity(0.04 - Double(index) * 0.005))
                     .overlay {
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(Color.primary.opacity(0.06), lineWidth: 1)
@@ -29,34 +44,36 @@ struct AlbumCardView: View {
                     .offset(x: transform.x, y: transform.y)
             }
 
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.08), radius: 24, y: 10)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            VStack(alignment: .leading, spacing: 14) {
+                LocalPhotoView(path: coverPhotoPath)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(album.name)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(momentCountText)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .overlay {
-                    VStack(alignment: .leading, spacing: 14) {
-                        LocalPhotoView(path: coverPhotoPath)
-                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .aspectRatio(4 / 3, contentMode: .fit)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(album.name)
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-
-                            Text(momentCountText)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
+            }
+            .padding(22)
+            .background {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 24, y: 10)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
                     }
-                    .padding(22)
-                }
+            }
         }
-        .padding(.bottom, 18)
+        .padding(.bottom, 18 + backdropBottomInset)
         .padding(.horizontal, 10)
     }
 }
@@ -70,7 +87,7 @@ private struct CardLayerTransform {
 #Preview {
     let album = Album(name: "Weekend Escape")
 
-    AlbumCardView(album: album, coverPhotoPath: nil, momentCountText: "2 Moments")
+    AlbumCardView(album: album, coverPhotoPath: nil, momentCountText: "2 Moments", layerCount: 2)
         .padding()
         .background(Color(.systemGroupedBackground))
 }
