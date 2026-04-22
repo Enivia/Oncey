@@ -21,6 +21,58 @@ struct OnceyTests {
         #expect(FileManager.default.fileExists(atPath: replacedPath))
     }
 
+    @Test func momentDeletionRemovesModelsAndManagedImages() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
+        let photoPath = try AppImageStore.store(makeImage(color: .systemGreen))
+
+        let album = Album(name: "Cleanup Trip", createdAt: createdAt, updatedAt: createdAt)
+        let moment = Moment(
+            album: album,
+            photo: photoPath,
+            location: "Osaka, Japan",
+            note: "Delete me",
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+
+        context.insert(album)
+        context.insert(moment)
+        try context.save()
+
+        try MomentDeletionService.delete([moment], in: context)
+
+        let remainingMoments = try context.fetch(FetchDescriptor<Moment>())
+        #expect(remainingMoments.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: photoPath))
+    }
+
+    @MainActor
+    @Test func shareExportCreatesImageFile() throws {
+        let photoPath = try AppImageStore.store(makeImage(color: .systemOrange))
+        defer { AppImageStore.deleteImageIfManaged(at: photoPath) }
+
+        let album = Album(name: "Share Trip")
+        let moment = Moment(
+            album: album,
+            photo: photoPath,
+            location: "Kyoto, Japan",
+            note: "Export this card",
+            createdAt: Date(timeIntervalSince1970: 1_713_744_000),
+            updatedAt: Date(timeIntervalSince1970: 1_713_744_000)
+        )
+
+        let exportURL = try MomentShareExportService.exportFile(moment: moment, style: .styledCard1, scale: 1)
+        defer { try? FileManager.default.removeItem(at: exportURL) }
+
+        #expect(FileManager.default.fileExists(atPath: exportURL.path()))
+
+        let exportedAttributes = try FileManager.default.attributesOfItem(atPath: exportURL.path())
+        let fileSize = exportedAttributes[.size] as? NSNumber
+        #expect((fileSize?.intValue ?? 0) > 0)
+    }
+
     @Test func swiftDataCrudForAlbumsAndMoments() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
