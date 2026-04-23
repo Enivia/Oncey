@@ -7,6 +7,7 @@ import SwiftUI
 
 struct LocalPhotoView: View {
     let path: String?
+    var contentMode: ContentMode = .fill
 
     var body: some View {
         Group {
@@ -23,20 +24,36 @@ struct LocalPhotoView: View {
         ImageResourceService.platformImage(from: path)
     }
 
+    @ViewBuilder
     private func imageView(for image: UIImage) -> some View {
-        Image(uiImage: image)
-            .resizable()
-            .scaledToFill()
+        switch contentMode {
+        case .fill:
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        case .fit:
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+        }
     }
 #elseif os(macOS)
     private func platformImage(for path: String) -> NSImage? {
         ImageResourceService.platformImage(from: path)
     }
 
+    @ViewBuilder
     private func imageView(for image: NSImage) -> some View {
-        Image(nsImage: image)
-            .resizable()
-            .scaledToFill()
+        switch contentMode {
+        case .fill:
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+        case .fit:
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        }
     }
 #endif
 
@@ -53,4 +70,11 @@ struct LocalPhotoView: View {
                 .foregroundStyle(.white.opacity(0.9))
         }
     }
+}
+
+#Preview("Placeholder") {
+    LocalPhotoView(path: nil)
+        .frame(width: 320, height: 240)
+        .padding()
+        .background(AppTheme.Colors.background)
 }

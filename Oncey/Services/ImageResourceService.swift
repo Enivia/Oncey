@@ -23,9 +23,17 @@ enum ImageResourceService {
     static func platformImage(from path: String) -> UIImage? {
         UIImage(contentsOfFile: path)
     }
+
+    static func imageSize(from path: String) -> CGSize? {
+        platformImage(from: path)?.size
+    }
 #elseif os(macOS)
     static func platformImage(from path: String) -> NSImage? {
         NSImage(contentsOfFile: path)
+    }
+
+    static func imageSize(from path: String) -> CGSize? {
+        platformImage(from: path)?.size
     }
 #endif
 }

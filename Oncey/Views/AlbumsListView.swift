@@ -17,36 +17,51 @@ struct AlbumsListView: View {
     @State private var isPresentingError = false
 
     var body: some View {
-        Group {
-            if albums.isEmpty {
-                ContentUnavailableView(
-                    "No albums yet",
-                    systemImage: "photo.on.rectangle.angled",
-                    description: Text("Create your first album from the add button.")
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(albums) { album in
-                            NavigationLink {
-                                MomentsTimelineView(album: album)
-                            } label: {
-                                AlbumCardView(
-                                    album: album,
-                                    coverPhotoPath: viewModel.coverPhotoPath(for: album),
-                                    momentCountText: viewModel.momentCountText(for: album),
-                                    layerCount: viewModel.layerCount(for: album)
-                                )
+        ZStack {
+            AppPageBackground(style: .dotted)
+
+            GeometryReader { proxy in
+                let albumCardWidth = proxy.size.width * AppTheme.Layout.albumCardWidthRatio
+
+                Group {
+                    if albums.isEmpty {
+                        ContentUnavailableView(
+                            "No albums yet",
+                            systemImage: "photo.on.rectangle.angled",
+                            description: Text("Create your first album from the add button.")
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: AppTheme.Spacing.s3) {
+                                ForEach(albums) { album in
+                                    HStack(spacing: 0) {
+                                        Spacer(minLength: 0)
+
+                                        NavigationLink {
+                                            MomentsTimelineView(album: album)
+                                        } label: {
+                                            AlbumCardView(
+                                                album: album,
+                                                coverPhotoPath: viewModel.coverPhotoPath(for: album),
+                                                momentCountText: viewModel.momentCountText(for: album),
+                                                layerCount: viewModel.layerCount(for: album)
+                                            )
+                                            .frame(width: albumCardWidth)
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        Spacer(minLength: 0)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, AppTheme.Spacing.s4)
+                            .padding(.vertical, AppTheme.Spacing.s6)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 20)
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -122,6 +137,31 @@ private struct AlbumsListPendingEditorInput: Identifiable {
 }
 
 #Preview {
-    AlbumsListView()
-        .modelContainer(for: [Album.self, Moment.self], inMemory: true)
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Album.self, Moment.self, configurations: config)
+
+    let album1 = Album(name: "Tokyo Trip 2024")
+    container.mainContext.insert(album1)
+    container.mainContext.insert(Moment(
+        album: album1, photo: "", location: "Shibuya, Tokyo",
+        note: "Golden hour at the famous crossing.",
+        createdAt: Date(timeIntervalSince1970: 1_713_628_800)
+    ))
+    container.mainContext.insert(Moment(
+        album: album1, photo: "", location: "Shinjuku, Tokyo",
+        note: "Neon signs and night-market energy.",
+        createdAt: Date(timeIntervalSince1970: 1_713_715_200)
+    ))
+
+    let album2 = Album(name: "Weekend Escape")
+    container.mainContext.insert(album2)
+    container.mainContext.insert(Moment(
+        album: album2, photo: "", location: "Lake District, UK",
+        note: "Misty morning hike along the shore."
+    ))
+
+    return NavigationStack {
+        AlbumsListView()
+    }
+    .modelContainer(container)
 }

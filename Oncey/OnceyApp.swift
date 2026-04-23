@@ -27,6 +27,7 @@ struct OnceyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.light)
         }
         .modelContainer(sharedModelContainer)
     }

@@ -38,27 +38,30 @@ struct MomentsTimelineView: View {
     }
 
     var body: some View {
-        Group {
-            if viewModel.moments.isEmpty {
-                ContentUnavailableView(
-                    "No moments yet",
-                    systemImage: "clock.badge.plus",
-                    description: Text("Add a moment from the toolbar.")
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(viewModel.moments.enumerated()), id: \.element.id) { index, moment in
-                            timelineRow(for: moment, at: index)
+        ZStack {
+            AppPageBackground(style: .dotted)
+
+            Group {
+                if viewModel.moments.isEmpty {
+                    ContentUnavailableView(
+                        "No moments yet",
+                        systemImage: "clock.badge.plus",
+                        description: Text("Add a moment from the toolbar.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(viewModel.moments.enumerated()), id: \.element.id) { index, moment in
+                                timelineRow(for: moment, at: index)
+                            }
                         }
+                        .padding(.leading, AppTheme.Spacing.s5)
+                        .padding(.bottom, AppTheme.Spacing.s10)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                    .padding(.bottom, 36)
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
         .navigationTitle(isSelectionMode ? selectedCountTitle : viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -158,7 +161,7 @@ struct MomentsTimelineView: View {
             timestampText: viewModel.timestampText(for: moment),
             isFirst: index == 0,
             isLast: index == viewModel.moments.count - 1,
-            bottomSpacing: index == viewModel.moments.count - 1 ? 0 : 30,
+            bottomSpacing: index == viewModel.moments.count - 1 ? 0 : AppTheme.Spacing.s6,
             isSelectionMode: isSelectionMode,
             isSelected: selectedMomentIDs.contains(moment.id),
             onMultiSelect: {
@@ -276,17 +279,26 @@ private struct TimelinePendingShareInput: Identifiable {
 }
 
 #Preview {
-    let album = Album(name: "Timeline Preview")
-    let moment = Moment(album: album, photo: "", location: "Berlin, Germany")
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Album.self, Moment.self, configurations: config)
 
-    MomentTimelineRowView(
-        moment: moment,
-        timestampText: "Apr 18, 2026 at 7:05 PM",
-        isFirst: true,
-        isLast: false,
-        bottomSpacing: 30,
-        isSelectionMode: false,
-        isSelected: false
-    )
-        .padding()
+    let album = Album(name: "Tokyo Trip 2024")
+    container.mainContext.insert(album)
+
+    let entries: [(TimeInterval, String, String)] = [
+        (1_713_715_200, "Shinjuku, Tokyo", "Neon signs everywhere — the city never sleeps."),
+        (1_713_628_800, "Shibuya, Tokyo", "Golden hour at the famous crossing."),
+        (1_713_542_400, "Harajuku, Tokyo", "Colourful street fashion and crepe shops.")
+    ]
+    for (ts, loc, note) in entries {
+        container.mainContext.insert(Moment(
+            album: album, photo: "", location: loc, note: note,
+            createdAt: Date(timeIntervalSince1970: ts)
+        ))
+    }
+
+    return NavigationStack {
+        MomentsTimelineView(album: album)
+    }
+    .modelContainer(container)
 }

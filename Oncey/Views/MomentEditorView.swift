@@ -92,16 +92,19 @@ struct MomentEditorView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                photoSection
-                locationSection
-                noteSection
+        ZStack {
+            AppPageBackground()
+
+            ScrollView {
+                VStack(spacing: AppTheme.Spacing.s6) {
+                    photoSection
+                    locationSection
+                    noteSection
+                }
+                .padding(.horizontal, AppTheme.Spacing.s6)
+                .padding(.vertical, AppTheme.Spacing.s6)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 20)
         }
-        .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .navigationTitle(mode.navigationTitle)
@@ -118,6 +121,7 @@ struct MomentEditorView: View {
                         .textInputAutocapitalization(.words)
                         .multilineTextAlignment(.center)
                         .font(.headline.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
                         .focused($isAlbumNameFocused)
                         .frame(maxWidth: 220)
                         .submitLabel(.done)
@@ -168,87 +172,103 @@ struct MomentEditorView: View {
     }
 
     private var photoSection: some View {
-        editorCard(title: "Photo") {
-            ZStack(alignment: .bottomTrailing) {
-                photoPreview
+        ZStack(alignment: .bottomTrailing) {
+            photoPreview
 
-                Button("Change") {
-                    isPhotoPickerPresented = true
-                }
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .padding(16)
+            Button {
+                isPhotoPickerPresented = true
             }
+            label: {
+                Label("Change", systemImage: "photo")
+                    .padding(.horizontal, AppTheme.Spacing.s2)
+                    .padding(.vertical, AppTheme.Spacing.s1)
+            }
+            .buttonStyle(.glass)
+            .padding(AppTheme.Spacing.s5)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private var photoPreview: some View {
         Group {
             if let draftImage {
-                Image(uiImage: draftImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 220, maxHeight: 340)
-                    .background(Color(.secondarySystemGroupedBackground))
+                photoPreview(image: draftImage, size: draftImage.size)
             } else if let existingPath = existingPhotoPath {
-                LocalPhotoView(path: existingPath)
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 220, maxHeight: 340)
-                    .background(Color(.secondarySystemGroupedBackground))
+                photoPreview(path: existingPath)
             } else {
-                Color(.secondarySystemGroupedBackground)
+                AppTheme.Colors.background
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: 220, maxHeight: 340)
+                    .frame(height: 240)
                     .overlay {
                         Image(systemName: "photo")
                             .font(.system(size: 30, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var locationSection: some View {
-        editorCard(title: "Location") {
-            HStack(spacing: 14) {
-                Label {
-                    Text(locationService.displayText)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                } icon: {
-                    Image(systemName: locationService.isRefreshing ? "location.fill" : "location")
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                Spacer(minLength: 12)
-
-                Button {
-                    locationService.refresh()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.headline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Refresh location")
+        HStack() {
+            Label {
+                Text(locationService.displayText)
+                    .font(.body.weight(.medium))
+            } icon: {
+                Image(systemName: locationService.persistedValue.isEmpty ? "location" : "location.fill")
+                    .foregroundStyle(AppTheme.Colors.accent)
             }
+
+            Spacer(minLength: AppTheme.Spacing.s2)
+
+            Button {
+                locationService.refresh()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 16))
+            }
+            .frame(width: 36, height: 36)
+            .background(AppTheme.Colors.accentSoft.opacity(0.8))
+            .clipShape(Circle())
+            .accessibilityLabel("Refresh location")
         }
+        .padding(.horizontal, AppTheme.Spacing.s4)
+        .padding(.vertical, AppTheme.Spacing.s2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                .stroke(AppTheme.Colors.border, lineWidth: 1)
+        }
+        
     }
 
     private var noteSection: some View {
-        editorCard(title: "Note") {
+        ZStack(alignment: .topLeading) {
+            NoteEditorBackground()
+
             TextEditor(text: $note)
+                .frame(height: 140)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: 160)
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, AppTheme.Spacing.s4)
+                .padding(.vertical, AppTheme.Spacing.s2)
+                .background(Color.clear)
+
+            if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Add a note...")
+                    .font(.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary.opacity(0.7))
+                    .padding(.horizontal, AppTheme.Spacing.s5)
+                    .padding(.vertical, AppTheme.Spacing.s5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                .stroke(AppTheme.Colors.border, lineWidth: 1)
         }
     }
 
@@ -260,23 +280,27 @@ struct MomentEditorView: View {
         return nil
     }
 
-    private func editorCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.secondary)
+    private func photoPreview(image: UIImage, size: CGSize) -> some View {
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+    }
 
-            content()
+    private func photoPreview(path: String) -> some View {
+        return LocalPhotoView(path: path, contentMode: .fit)
+            .aspectRatio(imageAspectRatio(for: ImageResourceService.imageSize(from: path)), contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+    }
+
+    private func imageAspectRatio(for size: CGSize?) -> CGFloat? {
+        guard let size, size.width > 0, size.height > 0 else {
+            return nil
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.04), radius: 20, y: 10)
+
+        return size.width / size.height
     }
 
     private func loadReplacementImage(from item: PhotosPickerItem) async {
@@ -383,8 +407,59 @@ struct MomentEditorView: View {
     }
 }
 
+private struct NoteEditorBackground: View {
+    private let lineSpacing: CGFloat = 32
+    private let topInset: CGFloat = 36
+
+    var body: some View {
+        Canvas(rendersAsynchronously: true) { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(AppTheme.Colors.surface))
+
+            for y in stride(from: topInset, through: size.height, by: lineSpacing) {
+                var line = Path()
+                line.move(to: CGPoint(x: AppTheme.Spacing.s4, y: y))
+                line.addLine(to: CGPoint(x: size.width - AppTheme.Spacing.s4, y: y))
+                context.stroke(line, with: .color(AppTheme.Colors.accentSoft.opacity(0.8)), lineWidth: 1)
+            }
+        }
+    }
+}
+
 private struct PendingCropInput: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+#Preview("Edit Moment") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Album.self, Moment.self, configurations: config)
+
+    let album = Album(name: "Tokyo Trip 2024")
+    container.mainContext.insert(album)
+    let moment = Moment(
+        album: album,
+        photo: "",
+        location: "Shibuya, Tokyo",
+        note: "Golden hour at the famous crossing — the city alive with evening rush.",
+        createdAt: Date(timeIntervalSince1970: 1_713_628_800)
+    )
+    container.mainContext.insert(moment)
+
+    return NavigationStack {
+        MomentEditorView(mode: .editMoment(moment: moment))
+    }
+    .modelContainer(container)
+}
+
+#Preview("New Album") {
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 500)).image { ctx in
+        UIColor.systemIndigo.withAlphaComponent(0.55).setFill()
+        ctx.fill(ctx.format.bounds)
+    }
+
+    NavigationStack {
+        MomentEditorView(mode: .newAlbum(initialImage: image))
+    }
+    .modelContainer(for: [Album.self, Moment.self], inMemory: true)
 }
 #endif

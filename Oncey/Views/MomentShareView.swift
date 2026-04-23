@@ -15,28 +15,19 @@ struct MomentShareView: View {
     @State private var resultAlertMessage = ""
     @State private var isPresentingResultAlert = false
 
-    private let stylePickerHeight: CGFloat = 272
-
     var body: some View {
-        ScrollView {
-            VStack(spacing: 28) {
-                MomentCardView(moment: moment, style: selectedStyle, renderMode: .full)
-                    .frame(maxWidth: MomentCardLayout.fullCardWidth)
-                    .frame(maxWidth: .infinity)
-                    .shadow(color: .black.opacity(0.08), radius: 24, y: 12)
+        ZStack {
+            AppPageBackground()
 
-                if isPreparingShareExport {
-                    ProgressView("Preparing share image...")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            GeometryReader { proxy in
+                ScrollView(.vertical) {
+                    MomentCardView(moment: moment, style: selectedStyle, renderMode: .full)
+                        .padding(AppTheme.Spacing.s6)
+                        .frame(minWidth: proxy.size.width, minHeight: proxy.size.height, alignment: .center)
                 }
+                .defaultScrollAnchor(.center)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 32)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Share")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .toolbar {
@@ -47,21 +38,14 @@ struct MomentShareView: View {
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Save") {
+                Button("Save", systemImage: "square.and.arrow.down") {
                     Task {
                         await saveToPhotoLibrary()
                     }
                 }
                 .disabled(isSaving || isPreparingShareExport)
 
-                if let shareExportURL {
-                    ShareLink(item: shareExportURL) {
-                        Text("Share")
-                    }
-                } else {
-                    Button("Share") {}
-                        .disabled(true)
-                }
+                Button("Share", systemImage: "square.and.arrow.up"){}
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -78,49 +62,37 @@ struct MomentShareView: View {
     }
 
     private var stylePicker: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Divider()
-
-            Text("Card Style")
-                .font(.headline.weight(.semibold))
-                .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(MomentCardStyle.allCases) { style in
-                        stylePickerButton(for: style)
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.s4) {
+                ForEach(MomentCardStyle.allCases) { style in
+                    stylePickerButton(for: style)
                 }
-                .padding(.horizontal, 20)
             }
+            .padding(.horizontal, AppTheme.Spacing.s6)
+            .padding(.vertical, AppTheme.Spacing.s4)
         }
-        .padding(.top, 14)
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, minHeight: stylePickerHeight, maxHeight: stylePickerHeight, alignment: .top)
-        .background(.background)
-        .fixedSize(horizontal: false, vertical: true)
+        .background(AppTheme.Colors.surface)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.Colors.border)
+                .frame(height: 1)
+        }
     }
 
     private func stylePickerButton(for style: MomentCardStyle) -> some View {
         Button {
             selectedStyle = style
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 MomentCardView(moment: moment, style: style, renderMode: .thumbnail)
-                    .frame(width: MomentCardLayout.thumbnailCardWidth)
-                    .shadow(color: .black.opacity(0.08), radius: 16, y: 8)
-
-                Text(style.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .frame(width: 120)
             }
-            .padding(8)
-            .frame(width: MomentCardLayout.thumbnailCardWidth + 16, alignment: .leading)
-            .background(selectedStyle == style ? Color.accentColor.opacity(0.12) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(AppTheme.Spacing.s2)
+            .background(selectedStyle == style ? AppTheme.Colors.accentSoft : AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(selectedStyle == style ? Color.accentColor : Color.primary.opacity(0.06), lineWidth: selectedStyle == style ? 2 : 1)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                    .stroke(selectedStyle == style ? AppTheme.Colors.accentStroke : AppTheme.Colors.border, lineWidth: selectedStyle == style ? 2 : 1)
             }
         }
         .buttonStyle(.plain)
@@ -160,6 +132,21 @@ struct MomentShareView: View {
         resultAlertTitle = title
         resultAlertMessage = message
         isPresentingResultAlert = true
+    }
+}
+
+#Preview {
+    let album = Album(name: "Tokyo Trip 2024")
+    let moment = Moment(
+        album: album,
+        photo: "",
+        location: "Shibuya, Tokyo",
+        note: "Golden hour at the famous crossing — the city alive with evening rush.",
+        createdAt: Date(timeIntervalSince1970: 1_713_628_800)
+    )
+
+    NavigationStack {
+        MomentShareView(moment: moment)
     }
 }
 #endif

@@ -42,45 +42,42 @@ struct MomentTimelineRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.s3) {
             TimelineRailView(isFirst: isFirst, isLast: isLast)
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
                 Text(timestampText)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .padding(.top, 12)
 
                 photoContent
-
-                if bottomSpacing > 0 {
-                    Color.clear
-                        .frame(height: bottomSpacing)
-                }
-            }
+            }.padding(.bottom, bottomSpacing)
         }
     }
 
     private var photoContent: some View {
-        let imageCard = ZStack(alignment: .topTrailing) {
-            LocalPhotoView(path: moment.photo)
-                .aspectRatio(4 / 3, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(selectionStrokeColor, lineWidth: isSelected ? 2 : 1)
-                }
-                .shadow(color: .black.opacity(0.06), radius: 20, y: 8)
-
-            if isSelectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : .white)
-                    .padding(14)
-                    .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
+        let imageCard = LocalPhotoView(path: moment.photo, contentMode: .fit)
+            .frame(width: photoDisplaySize.width, height: photoDisplaySize.height)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                    .stroke(selectionStrokeColor, lineWidth: 2)
             }
-        }
+            .overlay(alignment: .topTrailing) {
+                if isSelectionMode {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(isSelected ? AppTheme.Colors.accent : AppTheme.Colors.surface)
+                        .padding(AppTheme.Spacing.s4)
+                        .shadow(color: AppTheme.Colors.shadowEmphasis, radius: AppTheme.Shadow.emphasizedRadius, y: AppTheme.Shadow.emphasizedYOffset)
+                }
+            }
+            .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
 
-        return imageCard.contextMenu {
+        return imageCard
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contextMenu {
             if !isSelectionMode {
                 if let onMultiSelect {
                     Button(action: onMultiSelect) {
@@ -103,12 +100,26 @@ struct MomentTimelineRowView: View {
         }
     }
 
-    private var selectionStrokeColor: Color {
-        if isSelected {
-            return .accentColor
+    private var photoDisplaySize: CGSize {
+        let fallbackSize = CGSize(width: maxPhotoDimension, height: maxPhotoDimension * 0.75)
+
+        guard let imageSize = ImageResourceService.imageSize(from: moment.photo) else {
+            return fallbackSize
         }
 
-        return Color.primary.opacity(0.06)
+        return AppTheme.Layout.fittedSize(for: imageSize, maxDimension: maxPhotoDimension)
+    }
+
+    private var maxPhotoDimension: CGFloat {
+        AppTheme.Layout.screenWidth * AppTheme.Layout.timelinePhotoMaxWidthRatio
+    }
+
+    private var selectionStrokeColor: Color {
+        if isSelected {
+            return AppTheme.Colors.accentStroke
+        }
+
+        return Color.clear
     }
 }
 
@@ -133,19 +144,19 @@ private struct TimelineRailView: View {
                         path.addLine(to: CGPoint(x: centerX, y: geometry.size.height))
                     }
                 }
-                .stroke(Color.secondary.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(AppTheme.Colors.divider, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
 
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(AppTheme.Colors.accent)
                     .frame(width: 12, height: 12)
                     .overlay {
                         Circle()
-                            .stroke(.background, lineWidth: 4)
+                            .stroke(AppTheme.Colors.surface, lineWidth: 2)
                     }
                     .position(x: centerX, y: nodeCenterY)
             }
         }
-        .frame(width: 28)
+        .frame(width: 24)
     }
 }
 

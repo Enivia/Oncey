@@ -20,44 +20,15 @@ struct PhotoCropView: View {
             GeometryReader { proxy in
                 let cropSize = aspectRatio.cropSize(in: proxy.size)
 
-                VStack(spacing: 28) {
-                    Spacer(minLength: 20)
+                ZStack {
+                    Color.black.ignoresSafeArea()
 
                     cropCanvas(cropSize: cropSize)
-
-                    VStack(spacing: 18) {
-                        Text("Pinch to zoom and drag to adjust the crop.")
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.72))
-
-                        HStack(spacing: 12) {
-                            ForEach(CropAspectRatio.allCases) { ratio in
-                                Button(ratio.label) {
-                                    setAspectRatio(ratio, containerSize: proxy.size)
-                                }
-                                .buttonStyle(CropRatioButtonStyle(isSelected: ratio == aspectRatio))
-                            }
-                        }
-
-                        Button {
-                            rotateClockwise(cropSize: cropSize)
-                        } label: {
-                            Label("Rotate", systemImage: "rotate.right.fill")
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 12)
-                                .background(Color.white.opacity(0.16))
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Spacer(minLength: 20)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 20)
-                .background(Color.black.ignoresSafeArea())
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bottomToolbar(containerSize: proxy.size, cropSize: cropSize)
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Back", systemImage: "chevron.backward") {
@@ -66,11 +37,13 @@ struct PhotoCropView: View {
                     }
 
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Confirm") {
+                        Button {
                             onConfirm(exportCroppedImage(previewCropSize: cropSize))
                             dismiss()
+                        } label: {
+                            Image(systemName: "checkmark")
                         }
-                        .fontWeight(.semibold)
+                        .accessibilityLabel("Confirm")
                     }
                 }
                 .toolbarColorScheme(.dark, for: .navigationBar)
@@ -90,25 +63,75 @@ struct PhotoCropView: View {
     @ViewBuilder
     private func cropCanvas(cropSize: CGSize) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+            transformedPreviewImage(for: cropSize, opacity: 0.3)
 
-            Image(uiImage: image)
-                .resizable()
-                .frame(width: previewImageSize.width, height: previewImageSize.height)
-                .scaleEffect(baseCoverScale(for: cropSize) * zoomScale)
-                .rotationEffect(rotationAngle)
-                .offset(clampedOffset(for: cropSize))
-                .gesture(dragGesture(cropSize: cropSize))
-                .simultaneousGesture(magnificationGesture(cropSize: cropSize))
+            transformedPreviewImage(for: cropSize)
+                .compositingGroup()
+                .clipped(antialiased: false)
+
+            Rectangle()
+                .stroke(Color.white.opacity(0.92), lineWidth: 2)
         }
         .frame(width: cropSize.width, height: cropSize.height)
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .stroke(Color.white.opacity(0.9), lineWidth: 2)
-        }
+        .contentShape(Rectangle())
+        .gesture(dragGesture(cropSize: cropSize))
+        .simultaneousGesture(magnificationGesture(cropSize: cropSize))
         .shadow(color: .black.opacity(0.3), radius: 18, y: 10)
+    }
+
+    private func transformedPreviewImage(for cropSize: CGSize, opacity: Double = 1) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .frame(width: previewImageSize.width, height: previewImageSize.height)
+            .scaleEffect(baseCoverScale(for: cropSize) * zoomScale)
+            .rotationEffect(rotationAngle)
+            .offset(clampedOffset(for: cropSize))
+            .frame(width: cropSize.width, height: cropSize.height)
+            .opacity(opacity)
+    }
+
+    private func bottomToolbar(containerSize: CGSize, cropSize: CGSize) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                rotateClockwise(cropSize: cropSize)
+            } label: {
+                Image(systemName: "rotate.right")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.86))
+                    .frame(width: 72)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rotate")
+
+            toolbarDivider
+
+            HStack(spacing: 0) {
+                ForEach(CropAspectRatio.allCases) { ratio in
+                    Button {
+                        setAspectRatio(ratio, containerSize: containerSize)
+                    } label: {
+                        CropRatioButtonLabel(ratio: ratio, isSelected: ratio == aspectRatio)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("Crop ratio \(ratio.label)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 92)
+        .padding(.horizontal, AppTheme.Spacing.s2)
+        .padding(.top, AppTheme.Spacing.s2)
+        .padding(.bottom, AppTheme.Spacing.s4)
+    }
+
+    private var toolbarDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.12))
+            .frame(width: 1)
+            .padding(.vertical, AppTheme.Spacing.s3)
     }
 
     private func dragGesture(cropSize: CGSize) -> some Gesture {
@@ -237,18 +260,36 @@ struct PhotoCropView: View {
     }
 }
 
-private struct CropRatioButtonStyle: ButtonStyle {
+private struct CropRatioButtonLabel: View {
+    let ratio: CropAspectRatio
     let isSelected: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline.weight(.semibold))
-            .foregroundStyle(isSelected ? Color.black : Color.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(isSelected ? Color.white : Color.white.opacity(configuration.isPressed ? 0.24 : 0.14))
-            .clipShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+    private var selectionColor: Color {
+        isSelected ? AppTheme.Colors.accent : Color.white.opacity(0.6)
+    }
+
+    private var labelColor: Color {
+        isSelected ? AppTheme.Colors.accent : Color.white.opacity(0.74)
+    }
+
+    private var sampleSize: CGSize {
+        AppTheme.Layout.fittedSize(for: ratio.dimensions, maxSize: CGSize(width: 28, height: 28))
+    }
+
+    var body: some View {
+        VStack(spacing: AppTheme.Spacing.s1) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .stroke(selectionColor, lineWidth: 2)
+                .background(isSelected ? AppTheme.Colors.accentSoft : Color.clear)
+                .frame(width: sampleSize.width, height: sampleSize.height)
+                .frame(width: 40, height: 40)
+
+            Text(ratio.label)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(labelColor)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -262,5 +303,28 @@ private extension CGSize {
         let scale = maxDimension / longestEdge
         return CGSize(width: width * scale, height: height * scale)
     }
+}
+
+#Preview {
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 600)).image { ctx in
+        let stops: [(UIColor, CGFloat)] = [
+            (.systemIndigo, 0),
+            (.systemPurple, 0.5),
+            (.systemPink, 1)
+        ]
+        let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: stops.map(\.0.cgColor) as CFArray,
+            locations: stops.map(\.1)
+        )!
+        ctx.cgContext.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 800, y: 600),
+            options: []
+        )
+    }
+
+    PhotoCropView(image: image) { _ in }
 }
 #endif

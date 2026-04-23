@@ -34,47 +34,40 @@ struct AlbumCardView: View {
     var body: some View {
         ZStack(alignment: .top) {
             ForEach(Array(backdropTransforms.enumerated().reversed()), id: \.offset) { index, transform in
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.primary.opacity(0.04 - Double(index) * 0.005))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    }
+                Rectangle()
+                    .fill(AppTheme.Colors.surface.opacity(0.78 - Double(index) * 0.08))
+                    .border(AppTheme.Colors.border.opacity(0.75))
                     .rotationEffect(.degrees(transform.angle))
                     .offset(x: transform.x, y: transform.y)
             }
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
                 LocalPhotoView(path: coverPhotoPath)
                     .frame(maxWidth: .infinity)
-                    .aspectRatio(4 / 3, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipped()
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
                     Text(album.name)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
                         .lineLimit(1)
 
                     Text(momentCountText)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                         .lineLimit(1)
                 }
             }
-            .padding(22)
+            .padding(AppTheme.Spacing.s6)
             .background {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.background)
-                    .shadow(color: .black.opacity(0.08), radius: 24, y: 10)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    }
+                Rectangle()
+                    .fill(AppTheme.Colors.surface)
+                    .border(AppTheme.Colors.border)
+                    .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.cardRadius, y: AppTheme.Shadow.cardYOffset)
             }
         }
-        .padding(.bottom, 18 + backdropBottomInset)
-        .padding(.horizontal, 10)
+        .padding(.bottom, AppTheme.Spacing.s6 + backdropBottomInset)
     }
 }
 
@@ -89,5 +82,5 @@ private struct CardLayerTransform {
 
     AlbumCardView(album: album, coverPhotoPath: nil, momentCountText: "2 Moments", layerCount: 2)
         .padding()
-        .background(Color(.systemGroupedBackground))
+    .background(AppTheme.Colors.background)
 }

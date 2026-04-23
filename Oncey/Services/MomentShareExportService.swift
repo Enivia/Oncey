@@ -7,13 +7,14 @@ import UIKit
 enum MomentShareExportService {
     private static let exportDirectoryName = "MomentShareExports"
     private static let jpegCompressionQuality: CGFloat = 0.96
+    private static let renderedCardWidth: CGFloat = 360
 
     static func renderImage(moment: Moment, style: MomentCardStyle, scale: CGFloat) throws -> UIImage {
         let renderer = ImageRenderer(
             content: MomentCardView(moment: moment, style: style, renderMode: .full)
-                .frame(width: MomentCardLayout.fullCardWidth)
+                .frame(width: renderedCardWidth)
         )
-        renderer.proposedSize = ProposedViewSize(width: MomentCardLayout.fullCardWidth, height: nil)
+        renderer.proposedSize = ProposedViewSize(width: renderedCardWidth, height: nil)
         renderer.scale = scale
 
         guard let image = renderer.uiImage else {
