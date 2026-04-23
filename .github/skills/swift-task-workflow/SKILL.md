@@ -1,6 +1,6 @@
 ---
 name: swift-task-workflow
-description: Mandatory workflow for every task in this Xcode iOS mobile app repository. Use it before coding, planning, exploration, and question answering. Requires clarification loops in Plan mode, Sosumi MCP documentation lookup before action, Chrome MCP review of user-provided links, post-change verification, and final reporting of assumptions and hardcoded values.
+description: Mandatory workflow for every task in this Xcode iOS mobile app repository. Use it before coding, planning, exploration, and question answering. Requires clarification loops in Plan mode, sosumi MCP documentation lookup before action, chrome-devtools MCP review of user-provided links, post-change verification, and final reporting of assumptions and hardcoded values.
 ---
 
 # Swift Task Workflow
@@ -14,8 +14,8 @@ Except for reading this skill file itself, do not inspect workspace files, searc
 1. Read the full user request before acting.
 2. Identify all ambiguity, guessed intent, implied requirements, and missing constraints.
 3. Treat this repository as an iOS mobile app project for workflow, documentation lookup, and validation. If the Xcode project still exposes additional platforms, call out that mismatch explicitly instead of switching away from the iOS-first workflow.
-4. If the request includes links, read them with Chrome DevTools MCP before relying on their contents.
-5. If the task involves Apple components, Apple frameworks, or Apple platform behavior, read the relevant documentation with Sosumi MCP before making technical decisions.
+4. If the request includes links, read them with chrome-devtools MCP before relying on their contents.
+5. If the task involves Apple components, Apple frameworks, or Apple platform behavior, read the relevant documentation with sosumi MCP before making technical decisions.
 6. Inspect the relevant workspace files before proposing or applying changes.
 
 ## Confirmation Rules
@@ -31,11 +31,11 @@ Apply these rules whenever using Plan mode, and also whenever the request still 
 ## Documentation Rules
 
 1. For Apple components:
-    - Use Sosumi MCP first.
+    - Use sosumi MCP first.
     - Read the API or Human Interface Guidelines material relevant to the exact component or behavior.
     - Base implementation and review comments on that documentation.
 2. For user-supplied links:
-    - Use Chrome DevTools MCP first.
+    - Use chrome-devtools MCP first.
     - Read the linked content before summarizing, planning, or implementing against it.
 3. If documentation conflicts with the current code or the request, call out the conflict explicitly before proceeding.
 
@@ -68,7 +68,7 @@ Every code-changing task must pass all of the following checks. If any check fai
     - When changes affect model logic, SwiftData flows, navigation, state handling, or user interactions with existing test coverage, run the narrowest relevant test command in addition to the build.
     - If no relevant automated test exists or the environment cannot run it, state that explicitly.
 3. Documentation conformance:
-    - Compare the final implementation against the documentation read through Sosumi MCP or linked sources.
+    - Compare the final implementation against the documentation read through sosumi MCP or linked sources.
 4. Unresolved work scan:
     - Search touched files for TODO, FIXME, XXX, HACK, or placeholder markers that remain unresolved.
 5. SwiftData audit:

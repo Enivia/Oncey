@@ -13,8 +13,7 @@ struct MomentsTimelineView: View {
     let album: Album
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
-    @State private var pendingCropInput: TimelinePendingCropInput?
-    @State private var pendingCroppedImage: UIImage?
+    @State private var pendingExtractInput: TimelinePendingExtractInput?
     @State private var pendingEditorInput: TimelinePendingEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
     @State private var isSelectionMode = false
@@ -107,9 +106,18 @@ struct MomentsTimelineView: View {
                 await loadSelectedImage(from: newItem)
             }
         }
-        .fullScreenCover(item: $pendingCropInput, onDismiss: presentEditorIfNeeded) { input in
-            PhotoCropView(image: input.image) { croppedImage in
-                pendingCroppedImage = croppedImage
+        .fullScreenCover(item: $pendingExtractInput) { input in
+            ExtractPhotoView(image: input.image, mode: .momentCrop(template: input.template)) { output in
+                guard case .croppedMomentImage(let croppedImage) = output else {
+                    return
+                }
+
+                let nextInput = TimelinePendingEditorInput(image: croppedImage)
+
+                Task { @MainActor in
+                    await Task.yield()
+                    pendingEditorInput = nextInput
+                }
             }
         }
         .fullScreenCover(item: $pendingEditorInput) { input in
@@ -195,7 +203,10 @@ struct MomentsTimelineView: View {
     private func loadSelectedImage(from item: PhotosPickerItem) async {
         do {
             let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingCropInput = TimelinePendingCropInput(image: image)
+            pendingExtractInput = TimelinePendingExtractInput(
+                image: image,
+                template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size)
+            )
         } catch {
             errorTitle = "Couldn't load photo"
             errorMessage = error.localizedDescription
@@ -204,16 +215,6 @@ struct MomentsTimelineView: View {
 
         selectedPhotoItem = nil
     }
-
-    private func presentEditorIfNeeded() {
-        guard let pendingCroppedImage else {
-            return
-        }
-
-        pendingEditorInput = TimelinePendingEditorInput(image: pendingCroppedImage)
-        self.pendingCroppedImage = nil
-    }
-
     private var isPresentingSingleDeleteAlert: Binding<Bool> {
         Binding(
             get: { pendingSingleDeleteMoment != nil },
@@ -263,9 +264,10 @@ struct MomentsTimelineView: View {
     }
 }
 
-private struct TimelinePendingCropInput: Identifiable {
+private struct TimelinePendingExtractInput: Identifiable {
     let id = UUID()
     let image: UIImage
+    let template: ExtractPhotoTemplate
 }
 
 private struct TimelinePendingEditorInput: Identifiable {

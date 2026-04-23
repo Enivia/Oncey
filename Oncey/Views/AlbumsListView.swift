@@ -10,8 +10,7 @@ struct AlbumsListView: View {
     @State private var viewModel = AlbumsViewModel()
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
-    @State private var pendingCropInput: AlbumsListPendingCropInput?
-    @State private var pendingCroppedImage: UIImage?
+    @State private var pendingExtractInput: AlbumsListPendingExtractInput?
     @State private var pendingEditorInput: AlbumsListPendingEditorInput?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
@@ -87,14 +86,26 @@ struct AlbumsListView: View {
                 await loadSelectedImage(from: newItem)
             }
         }
-        .fullScreenCover(item: $pendingCropInput, onDismiss: presentEditorIfNeeded) { input in
-            PhotoCropView(image: input.image) { croppedImage in
-                pendingCroppedImage = croppedImage
+        .fullScreenCover(item: $pendingExtractInput) { input in
+            ExtractPhotoView(image: input.image, mode: .albumTemplate) { output in
+                guard case .albumTemplate(let result) = output else {
+                    return
+                }
+
+                let nextInput = AlbumsListPendingEditorInput(
+                    image: result.image,
+                    templateDraft: result.templateDraft
+                )
+
+                Task { @MainActor in
+                    await Task.yield()
+                    pendingEditorInput = nextInput
+                }
             }
         }
         .fullScreenCover(item: $pendingEditorInput) { input in
             NavigationStack {
-                MomentEditorView(mode: .newAlbum(initialImage: input.image))
+                MomentEditorView(mode: .newAlbum(initialImage: input.image, templateDraft: input.templateDraft))
             }
         }
         .alert("Couldn't load photo", isPresented: $isPresentingError) {
@@ -107,7 +118,7 @@ struct AlbumsListView: View {
     private func loadSelectedImage(from item: PhotosPickerItem) async {
         do {
             let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingCropInput = AlbumsListPendingCropInput(image: image)
+            pendingExtractInput = AlbumsListPendingExtractInput(image: image)
         } catch {
             errorMessage = error.localizedDescription
             isPresentingError = true
@@ -115,18 +126,9 @@ struct AlbumsListView: View {
 
         selectedPhotoItem = nil
     }
-
-    private func presentEditorIfNeeded() {
-        guard let pendingCroppedImage else {
-            return
-        }
-
-        pendingEditorInput = AlbumsListPendingEditorInput(image: pendingCroppedImage)
-        self.pendingCroppedImage = nil
-    }
 }
 
-private struct AlbumsListPendingCropInput: Identifiable {
+private struct AlbumsListPendingExtractInput: Identifiable {
     let id = UUID()
     let image: UIImage
 }
@@ -134,6 +136,7 @@ private struct AlbumsListPendingCropInput: Identifiable {
 private struct AlbumsListPendingEditorInput: Identifiable {
     let id = UUID()
     let image: UIImage
+    let templateDraft: AlbumTemplateOutlineDraft
 }
 
 #Preview {

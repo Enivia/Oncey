@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 enum MomentEditorMode {
-    case newAlbum(initialImage: UIImage)
+    case newAlbum(initialImage: UIImage, templateDraft: AlbumTemplateOutlineDraft)
     case newMoment(album: Album, initialImage: UIImage)
     case editMoment(moment: Moment)
 
@@ -54,13 +54,13 @@ struct MomentEditorView: View {
     @State private var albumName: String
     @State private var note: String
     @State private var draftImage: UIImage?
+    @State private var draftAlbumTemplate: AlbumTemplateOutlineDraft?
     @State private var locationService: CurrentLocationService
     @State private var hasAutoRequestedLocation = false
     @State private var hasImageChanges: Bool
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
-    @State private var pendingCropInput: PendingCropInput?
-    @State private var pendingReplacementImage: UIImage?
+    @State private var pendingExtractInput: PendingExtractInput?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
     @State private var isSaving = false
@@ -70,22 +70,25 @@ struct MomentEditorView: View {
         self.onComplete = onComplete
 
         switch mode {
-        case .newAlbum(let image):
+        case .newAlbum(let image, let templateDraft):
             _albumName = State(initialValue: "")
             _note = State(initialValue: "")
             _draftImage = State(initialValue: image)
+            _draftAlbumTemplate = State(initialValue: templateDraft)
             _locationService = State(initialValue: CurrentLocationService())
             _hasImageChanges = State(initialValue: true)
         case .newMoment(_, let image):
             _albumName = State(initialValue: "")
             _note = State(initialValue: "")
             _draftImage = State(initialValue: image)
+            _draftAlbumTemplate = State(initialValue: nil)
             _locationService = State(initialValue: CurrentLocationService())
             _hasImageChanges = State(initialValue: true)
         case .editMoment(let moment):
             _albumName = State(initialValue: "")
             _note = State(initialValue: moment.note)
             _draftImage = State(initialValue: ImageResourceService.platformImage(from: moment.photo))
+            _draftAlbumTemplate = State(initialValue: nil)
             _locationService = State(initialValue: CurrentLocationService(initialLocation: moment.location))
             _hasImageChanges = State(initialValue: false)
         }
@@ -151,9 +154,17 @@ struct MomentEditorView: View {
                 await loadReplacementImage(from: newItem)
             }
         }
-        .fullScreenCover(item: $pendingCropInput, onDismiss: applyPendingReplacementIfNeeded) { input in
-            PhotoCropView(image: input.image) { croppedImage in
-                pendingReplacementImage = croppedImage
+        .fullScreenCover(item: $pendingExtractInput) { input in
+            ExtractPhotoView(image: input.image, mode: input.mode) { output in
+                switch output {
+                case .albumTemplate(let result):
+                    draftImage = result.image
+                    draftAlbumTemplate = result.templateDraft
+                    hasImageChanges = true
+                case .croppedMomentImage(let croppedImage):
+                    draftImage = croppedImage
+                    hasImageChanges = true
+                }
             }
         }
         .task {
@@ -306,22 +317,12 @@ struct MomentEditorView: View {
     private func loadReplacementImage(from item: PhotosPickerItem) async {
         do {
             let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingCropInput = PendingCropInput(image: image)
+            pendingExtractInput = PendingExtractInput(image: image, mode: extractMode(for: image))
         } catch {
             present(error.localizedDescription)
         }
 
         selectedPhotoItem = nil
-    }
-
-    private func applyPendingReplacementIfNeeded() {
-        guard let pendingReplacementImage else {
-            return
-        }
-
-        draftImage = pendingReplacementImage
-        hasImageChanges = true
-        self.pendingReplacementImage = nil
     }
 
     private func save() {
@@ -349,9 +350,18 @@ struct MomentEditorView: View {
 
             switch mode {
             case .newAlbum:
+                let templateDraft = draftAlbumTemplate ?? AlbumTemplateOutlineDraft(photoSize: draftImage.size, outlineImage: nil)
+                let outlinePath = try templateDraft.outlineImage.map(AppImageStore.storeOutline)
                 let photoPath = try AppImageStore.store(draftImage)
                 let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
-                let album = Album(name: trimmedAlbumName, createdAt: now, updatedAt: now)
+                let album = Album(
+                    name: trimmedAlbumName,
+                    templateOutlinePath: outlinePath,
+                    templatePhotoWidth: templateDraft.photoSize.width,
+                    templatePhotoHeight: templateDraft.photoSize.height,
+                    createdAt: now,
+                    updatedAt: now
+                )
                 let moment = Moment(
                     album: album,
                     photo: photoPath,
@@ -405,6 +415,17 @@ struct MomentEditorView: View {
         errorMessage = message
         isPresentingError = true
     }
+
+    private func extractMode(for image: UIImage) -> ExtractPhotoMode {
+        switch mode {
+        case .newAlbum:
+            return .albumTemplate
+        case .newMoment(let album, _):
+            return .momentCrop(template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size))
+        case .editMoment(let moment):
+            return .momentCrop(template: AlbumTemplateResolver.resolve(for: moment.album, fallbackPhotoSize: image.size))
+        }
+    }
 }
 
 private struct NoteEditorBackground: View {
@@ -425,9 +446,10 @@ private struct NoteEditorBackground: View {
     }
 }
 
-private struct PendingCropInput: Identifiable {
+private struct PendingExtractInput: Identifiable {
     let id = UUID()
     let image: UIImage
+    let mode: ExtractPhotoMode
 }
 
 #Preview("Edit Moment") {
@@ -458,7 +480,12 @@ private struct PendingCropInput: Identifiable {
     }
 
     NavigationStack {
-        MomentEditorView(mode: .newAlbum(initialImage: image))
+        MomentEditorView(
+            mode: .newAlbum(
+                initialImage: image,
+                templateDraft: AlbumTemplateOutlineDraft(photoSize: image.size, outlineImage: nil)
+            )
+        )
     }
     .modelContainer(for: [Album.self, Moment.self], inMemory: true)
 }
