@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftUI
 import SwiftData
 #if canImport(UIKit)
@@ -8,8 +7,7 @@ import UIKit
 struct AlbumsListView: View {
     @Query(sort: [SortDescriptor(\Album.updatedAt, order: .reverse), SortDescriptor(\Album.createdAt, order: .reverse)]) private var albums: [Album]
     @State private var viewModel = AlbumsViewModel()
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isPhotoPickerPresented = false
+    @State private var isCameraPresented = false
     @State private var pendingExtractInput: AlbumsListPendingExtractInput?
     @State private var pendingEditorInput: AlbumsListPendingEditorInput?
     @State private var errorMessage: String?
@@ -64,26 +62,19 @@ struct AlbumsListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    isPhotoPickerPresented = true
+                    isCameraPresented = true
                 } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add album")
             }
         }
-        .photosPicker(
-            isPresented: $isPhotoPickerPresented,
-            selection: $selectedPhotoItem,
-            matching: .images,
-            preferredItemEncoding: .current
-        )
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            guard let newItem else {
-                return
-            }
-
-            Task {
-                await loadSelectedImage(from: newItem)
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraView(template: nil) { image in
+                Task { @MainActor in
+                    await Task.yield()
+                    pendingExtractInput = AlbumsListPendingExtractInput(image: image)
+                }
             }
         }
         .fullScreenCover(item: $pendingExtractInput) { input in
@@ -113,18 +104,6 @@ struct AlbumsListView: View {
         } message: {
             Text(errorMessage ?? "Please try again.")
         }
-    }
-
-    private func loadSelectedImage(from item: PhotosPickerItem) async {
-        do {
-            let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingExtractInput = AlbumsListPendingExtractInput(image: image)
-        } catch {
-            errorMessage = error.localizedDescription
-            isPresentingError = true
-        }
-
-        selectedPhotoItem = nil
     }
 }
 

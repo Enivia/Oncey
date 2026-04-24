@@ -1,6 +1,6 @@
 ---
 name: swift-task-workflow
-description: Mandatory workflow for every task in this Xcode iOS mobile app repository. Use it before coding, planning, exploration, and question answering. Requires clarification loops in Plan mode, sosumi MCP documentation lookup before action, chrome-devtools MCP review of user-provided links, post-change verification, and final reporting of assumptions and hardcoded values.
+description: Mandatory workflow for every task in this Xcode iOS mobile app repository. Use it before coding, planning, exploration, and question answering. Requires clarification loops in Plan mode, sosumi MCP documentation lookup before action, chrome-devtools MCP review of user-provided links, efficient validation, on-demand subagent use, and final reporting of assumptions and hardcoded values.
 ---
 
 # Swift Task Workflow
@@ -17,6 +17,8 @@ Except for reading this skill file itself, do not inspect workspace files, searc
 4. If the request includes links, read them with chrome-devtools MCP before relying on their contents.
 5. If the task involves Apple components, Apple frameworks, or Apple platform behavior, read the relevant documentation with sosumi MCP before making technical decisions.
 6. Inspect the relevant workspace files before proposing or applying changes.
+7. Respond in Chinese by default, keep wording concise, and use emoji sparingly only when they improve clarity.
+8. If the task involves coding, use the globally installed `using-superpowers` and `karpathy-guidelines` skills on demand when they can improve planning, debugging, implementation, or review quality.
 
 ## Confirmation Rules
 
@@ -45,6 +47,7 @@ Apply these rules whenever using Plan mode, and also whenever the request still 
 2. Do not leave unresolved TODO, FIXME, XXX, HACK, or placeholder markers in touched code.
 3. If the task changes SwiftData behavior, audit all affected create, read, update, and delete flows.
 4. If a required validation step cannot be completed, state exactly what blocked it and what remains unverified.
+5. Prefer the cheapest sufficient validation first; do not jump to full Xcode builds when a narrower executable check can validate the touched slice.
 
 ## SwiftData Audit Rules
 
@@ -60,12 +63,14 @@ When a task touches SwiftData, confirm all applicable operations are handled cor
 Every code-changing task must pass all of the following checks. If any check fails, fix the code and validate again before finishing.
 
 1. Build validation:
-    - Run a real build for the app target.
-    - In this repository, use xcodebuild -scheme Oncey build as the default baseline validation.
+    - Prefer a narrow executable validation first when it can fully cover the touched behavior.
+    - Run a real build for the app target when the change affects Swift or Objective-C source, Xcode project configuration, package or dependency wiring, app integration surfaces, or when narrower validation is insufficient.
+    - In this repository, use xcodebuild -scheme Oncey build as the default full-build baseline when a full build is required.
+    - Skip full Xcode build for prompt, instruction, skill, documentation, or similarly non-app changes, and state that explicitly.
     - Use any available destination or signing configuration that allows the build to complete successfully.
     - If a specific destination or signing requirement blocks validation, state that explicitly.
 2. Automated tests:
-    - When changes affect model logic, SwiftData flows, navigation, state handling, or user interactions with existing test coverage, run the narrowest relevant test command in addition to the build.
+    - When changes affect model logic, SwiftData flows, navigation, state handling, or user interactions with existing test coverage, run the narrowest relevant test command in addition to any required build.
     - If no relevant automated test exists or the environment cannot run it, state that explicitly.
 3. Documentation conformance:
     - Compare the final implementation against the documentation read through sosumi MCP or linked sources.

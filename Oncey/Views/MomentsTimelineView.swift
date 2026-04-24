@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftUI
 #if canImport(SwiftData)
 import SwiftData
@@ -11,8 +10,7 @@ struct MomentsTimelineView: View {
     @Environment(\.modelContext) private var modelContext
 
     let album: Album
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isPhotoPickerPresented = false
+    @State private var isCameraPresented = false
     @State private var pendingExtractInput: TimelinePendingExtractInput?
     @State private var pendingEditorInput: TimelinePendingEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
@@ -83,7 +81,7 @@ struct MomentsTimelineView: View {
                     .accessibilityLabel("Delete selected moments")
                 } else {
                     Button {
-                        isPhotoPickerPresented = true
+                        isCameraPresented = true
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -91,19 +89,15 @@ struct MomentsTimelineView: View {
                 }
             }
         }
-        .photosPicker(
-            isPresented: $isPhotoPickerPresented,
-            selection: $selectedPhotoItem,
-            matching: .images,
-            preferredItemEncoding: .current
-        )
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            guard let newItem else {
-                return
-            }
-
-            Task {
-                await loadSelectedImage(from: newItem)
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraView(template: cameraTemplate) { image in
+                Task { @MainActor in
+                    await Task.yield()
+                    pendingExtractInput = TimelinePendingExtractInput(
+                        image: image,
+                        template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size)
+                    )
+                }
             }
         }
         .fullScreenCover(item: $pendingExtractInput) { input in
@@ -200,21 +194,17 @@ struct MomentsTimelineView: View {
         }
     }
 
-    private func loadSelectedImage(from item: PhotosPickerItem) async {
-        do {
-            let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingExtractInput = TimelinePendingExtractInput(
-                image: image,
-                template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size)
-            )
-        } catch {
-            errorTitle = "Couldn't load photo"
-            errorMessage = error.localizedDescription
-            isPresentingError = true
+    private var cameraTemplate: ExtractPhotoTemplate? {
+        guard album.templatePhotoSize != nil || album.templateOutlinePath != nil else {
+            return nil
         }
 
-        selectedPhotoItem = nil
+        return AlbumTemplateResolver.resolve(
+            for: album,
+            fallbackPhotoSize: album.templatePhotoSize ?? CGSize(width: 3, height: 4)
+        )
     }
+
     private var isPresentingSingleDeleteAlert: Binding<Bool> {
         Binding(
             get: { pendingSingleDeleteMoment != nil },

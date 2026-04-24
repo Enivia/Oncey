@@ -152,8 +152,9 @@ enum PersonOutlineExtractionService {
         }
 
         let edgeMask = maskImage
-            .applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 8.0])
+            .applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 10.0])
             .applyingFilter("CIMaskToAlpha")
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 2.0])
         let foreground = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 0.96))
             .cropped(to: extent)
         let background = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))

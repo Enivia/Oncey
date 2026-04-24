@@ -76,7 +76,6 @@ struct MomentTimelineRowView: View {
             .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
 
         return imageCard
-            .frame(maxWidth: .infinity, alignment: .leading)
             .contextMenu {
             if !isSelectionMode {
                 if let onMultiSelect {

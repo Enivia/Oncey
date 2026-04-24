@@ -33,17 +33,16 @@ struct ExtractPhotoView: View {
                 ZStack {
                     Color.black.ignoresSafeArea()
 
-                    VStack(spacing: AppTheme.Spacing.s4) {
-                        Spacer(minLength: 0)
+                    VStack(spacing: 0) {
+                        contentArea(previewSize: previewSize, cropSize: cropSize)
 
-                        previewArea(previewSize: previewSize, cropSize: cropSize)
-
-                        Spacer(minLength: 0)
-                    }
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showsCropControls {
-                        bottomToolbar(previewSize: previewSize, cropSize: cropSize)
+                        if showsCropControls {
+                            bottomToolbar(
+                                previewSize: previewSize,
+                                cropSize: cropSize,
+                                bottomInset: proxy.safeAreaInsets.bottom
+                            )
+                        }
                     }
                 }
                 .toolbar {
@@ -110,6 +109,35 @@ struct ExtractPhotoView: View {
     }
 
     @ViewBuilder
+    private func contentArea(previewSize: CGSize, cropSize: CGSize) -> some View {
+        switch mode {
+        case .albumTemplate:
+            GeometryReader { contentProxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: AppTheme.Spacing.s4) {
+                        Spacer(minLength: 0)
+
+                        previewArea(previewSize: previewSize, cropSize: cropSize)
+                            .frame(maxWidth: .infinity)
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: contentProxy.size.height)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .momentCrop:
+            VStack(spacing: AppTheme.Spacing.s4) {
+                Spacer(minLength: 0)
+                previewArea(previewSize: previewSize, cropSize: cropSize)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
     private func previewArea(previewSize: CGSize, cropSize: CGSize) -> some View {
         switch mode {
         case .albumTemplate:
@@ -129,9 +157,7 @@ struct ExtractPhotoView: View {
                     .scaledToFit()
 
                 if showsOutline, let outlineImage {
-                    Image(uiImage: outlineImage)
-                        .resizable()
-                        .scaledToFit()
+                    OutlineMaskImageView(image: outlineImage, opacity: 0.96, expansion: 1.2)
                         .transition(.opacity)
                 }
             }
@@ -159,11 +185,8 @@ struct ExtractPhotoView: View {
                 transformedPreviewImage(previewSize: previewSize, cropSize: cropSize)
 
                 if showsOutline, let outlineImage = template.outlineImage {
-                    Image(uiImage: outlineImage)
-                        .resizable()
-                        .scaledToFit()
+                    OutlineMaskImageView(image: outlineImage, opacity: 0.94, expansion: 1.2)
                         .frame(width: cropSize.width, height: cropSize.height)
-                        .opacity(0.94)
                         .allowsHitTesting(false)
                 }
 
@@ -196,7 +219,7 @@ struct ExtractPhotoView: View {
             .frame(width: previewSize.width, height: previewSize.height)
     }
 
-    private func bottomToolbar(previewSize: CGSize, cropSize: CGSize) -> some View {
+    private func bottomToolbar(previewSize: CGSize, cropSize: CGSize, bottomInset: CGFloat) -> some View {
         HStack(spacing: 0) {
             Button {
                 rotateClockwise(previewSize: previewSize, cropSize: cropSize)
@@ -217,7 +240,8 @@ struct ExtractPhotoView: View {
         .frame(height: 92)
         .padding(.horizontal, AppTheme.Spacing.s2)
         .padding(.top, AppTheme.Spacing.s2)
-        .padding(.bottom, AppTheme.Spacing.s4)
+        .padding(.bottom, max(bottomInset, AppTheme.Spacing.s4))
+        .background(Color.black.opacity(0.96))
     }
 
     private func previewSize(for availableWidth: CGFloat) -> CGSize {

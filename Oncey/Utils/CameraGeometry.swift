@@ -1,0 +1,181 @@
+import CoreGraphics
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+enum CameraCaptureAspect: String, CaseIterable, Identifiable {
+    case threeByFour
+    case square
+    case nineBySixteen
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .threeByFour:
+            return "3:4"
+        case .square:
+            return "1:1"
+        case .nineBySixteen:
+            return "9:16"
+        }
+    }
+
+    var aspectRatio: CGFloat {
+        switch self {
+        case .threeByFour:
+            return 3 / 4
+        case .square:
+            return 1
+        case .nineBySixteen:
+            return 9 / 16
+        }
+    }
+
+    var next: Self {
+        let allCases = Self.allCases
+        guard let index = allCases.firstIndex(of: self) else {
+            return .threeByFour
+        }
+
+        let nextIndex = allCases.index(after: index)
+        return nextIndex == allCases.endIndex ? allCases[allCases.startIndex] : allCases[nextIndex]
+    }
+}
+
+struct CameraMaskLayout: Equatable {
+    let frame: CGRect
+    let clockwiseQuarterTurns: Int
+
+    var rotationDegrees: Double {
+        Double(clockwiseQuarterTurns) * 90
+    }
+}
+
+enum CameraGeometry {
+    static func cropRect(for sourceSize: CGSize, aspect: CameraCaptureAspect) -> CGRect {
+        cropRect(for: sourceSize, aspectRatio: aspect.aspectRatio)
+    }
+
+    static func cropRect(for sourceSize: CGSize, aspectRatio: CGFloat) -> CGRect {
+        guard sourceSize.width > 0,
+              sourceSize.height > 0,
+              aspectRatio > 0 else {
+            return .zero
+        }
+
+        let sourceAspectRatio = sourceSize.width / sourceSize.height
+
+        if abs(sourceAspectRatio - aspectRatio) < 0.0001 {
+            return CGRect(origin: .zero, size: sourceSize)
+        }
+
+        if sourceAspectRatio > aspectRatio {
+            let cropWidth = sourceSize.height * aspectRatio
+            let originX = (sourceSize.width - cropWidth) / 2
+            return CGRect(x: originX, y: 0, width: cropWidth, height: sourceSize.height)
+        }
+
+        let cropHeight = sourceSize.width / aspectRatio
+        let originY = (sourceSize.height - cropHeight) / 2
+        return CGRect(x: 0, y: originY, width: sourceSize.width, height: cropHeight)
+    }
+
+    static func maskLayout(for templateSize: CGSize, in previewSize: CGSize) -> CameraMaskLayout? {
+        guard templateSize.width > 0,
+              templateSize.height > 0,
+              previewSize.width > 0,
+              previewSize.height > 0 else {
+            return nil
+        }
+
+        let isLandscapeTemplate = templateSize.width > templateSize.height
+        let displayedTemplateSize = isLandscapeTemplate
+            ? CGSize(width: templateSize.height, height: templateSize.width)
+            : templateSize
+        let fittedSize = fittedSize(for: displayedTemplateSize, in: previewSize)
+
+        if isLandscapeTemplate {
+            return CameraMaskLayout(
+                frame: CGRect(
+                    x: 0,
+                    y: (previewSize.height - fittedSize.height) / 2,
+                    width: fittedSize.width,
+                    height: fittedSize.height
+                ),
+                clockwiseQuarterTurns: 1
+            )
+        }
+
+        return CameraMaskLayout(
+            frame: CGRect(
+                x: (previewSize.width - fittedSize.width) / 2,
+                y: previewSize.height - fittedSize.height,
+                width: fittedSize.width,
+                height: fittedSize.height
+            ),
+            clockwiseQuarterTurns: 0
+        )
+    }
+
+    static func fittedSize(for sourceSize: CGSize, in boundingSize: CGSize) -> CGSize {
+        guard sourceSize.width > 0,
+              sourceSize.height > 0,
+              boundingSize.width > 0,
+              boundingSize.height > 0 else {
+            return .zero
+        }
+
+        let widthScale = boundingSize.width / sourceSize.width
+        let heightScale = boundingSize.height / sourceSize.height
+        let scale = min(widthScale, heightScale)
+
+        return CGSize(
+            width: sourceSize.width * scale,
+            height: sourceSize.height * scale
+        )
+    }
+}
+
+#if canImport(UIKit)
+enum CameraImageCropper {
+    static func croppedImage(_ image: UIImage, aspect: CameraCaptureAspect) -> UIImage {
+        let normalizedImage = normalized(image)
+        let cropRect = CameraGeometry.cropRect(for: normalizedImage.size, aspect: aspect)
+
+        guard cropRect.width > 0,
+              cropRect.height > 0,
+              cropRect.size != normalizedImage.size else {
+            return normalizedImage
+        }
+
+        let rendererFormat = UIGraphicsImageRendererFormat.default()
+        rendererFormat.scale = normalizedImage.scale
+        rendererFormat.opaque = true
+
+        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: rendererFormat)
+        return renderer.image { _ in
+            normalizedImage.draw(
+                in: CGRect(
+                    x: -cropRect.origin.x,
+                    y: -cropRect.origin.y,
+                    width: normalizedImage.size.width,
+                    height: normalizedImage.size.height
+                )
+            )
+        }
+    }
+
+    static func normalized(_ image: UIImage) -> UIImage {
+        guard image.imageOrientation != .up else {
+            return image
+        }
+
+        let renderer = UIGraphicsImageRenderer(size: image.size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+    }
+}
+#endif

@@ -1,5 +1,4 @@
 #if canImport(UIKit)
-import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
@@ -58,8 +57,7 @@ struct MomentEditorView: View {
     @State private var locationService: CurrentLocationService
     @State private var hasAutoRequestedLocation = false
     @State private var hasImageChanges: Bool
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isPhotoPickerPresented = false
+    @State private var isCameraPresented = false
     @State private var pendingExtractInput: PendingExtractInput?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
@@ -139,19 +137,12 @@ struct MomentEditorView: View {
                 .disabled(isSaving)
             }
         }
-        .photosPicker(
-            isPresented: $isPhotoPickerPresented,
-            selection: $selectedPhotoItem,
-            matching: .images,
-            preferredItemEncoding: .current
-        )
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            guard let newItem else {
-                return
-            }
-
-            Task {
-                await loadReplacementImage(from: newItem)
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraView(template: cameraTemplate) { image in
+                Task { @MainActor in
+                    await Task.yield()
+                    pendingExtractInput = PendingExtractInput(image: image, mode: extractMode(for: image))
+                }
             }
         }
         .fullScreenCover(item: $pendingExtractInput) { input in
@@ -187,7 +178,7 @@ struct MomentEditorView: View {
             photoPreview
 
             Button {
-                isPhotoPickerPresented = true
+                isCameraPresented = true
             }
             label: {
                 Label("Change", systemImage: "photo")
@@ -314,17 +305,6 @@ struct MomentEditorView: View {
         return size.width / size.height
     }
 
-    private func loadReplacementImage(from item: PhotosPickerItem) async {
-        do {
-            let image = try await PhotosPickerImageLoader.loadImage(from: item)
-            pendingExtractInput = PendingExtractInput(image: image, mode: extractMode(for: image))
-        } catch {
-            present(error.localizedDescription)
-        }
-
-        selectedPhotoItem = nil
-    }
-
     private func save() {
         guard !isSaving else {
             return
@@ -351,7 +331,12 @@ struct MomentEditorView: View {
             switch mode {
             case .newAlbum:
                 let templateDraft = draftAlbumTemplate ?? AlbumTemplateOutlineDraft(photoSize: draftImage.size, outlineImage: nil)
-                let outlinePath = try templateDraft.outlineImage.map(AppImageStore.storeOutline)
+                let outlinePath: String?
+                if let outlineImage = templateDraft.outlineImage {
+                    outlinePath = try AppImageStore.storeOutline(outlineImage)
+                } else {
+                    outlinePath = nil
+                }
                 let photoPath = try AppImageStore.store(draftImage)
                 let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
                 let album = Album(
@@ -414,6 +399,35 @@ struct MomentEditorView: View {
     private func present(_ message: String) {
         errorMessage = message
         isPresentingError = true
+    }
+
+    private var cameraTemplate: ExtractPhotoTemplate? {
+        switch mode {
+        case .newAlbum:
+            return nil
+        case .newMoment(let album, _):
+            guard album.templatePhotoSize != nil || album.templateOutlinePath != nil else {
+                return nil
+            }
+
+            return AlbumTemplateResolver.resolve(
+                for: album,
+                fallbackPhotoSize: album.templatePhotoSize ?? CGSize(width: 3, height: 4)
+            )
+        case .editMoment(let moment):
+            guard let album = moment.album else {
+                return nil
+            }
+
+            guard album.templatePhotoSize != nil || album.templateOutlinePath != nil else {
+                return nil
+            }
+
+            return AlbumTemplateResolver.resolve(
+                for: album,
+                fallbackPhotoSize: album.templatePhotoSize ?? CGSize(width: 3, height: 4)
+            )
+        }
     }
 
     private func extractMode(for image: UIImage) -> ExtractPhotoMode {
