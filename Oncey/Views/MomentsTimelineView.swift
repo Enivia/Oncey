@@ -10,9 +10,7 @@ struct MomentsTimelineView: View {
     @Environment(\.modelContext) private var modelContext
 
     let album: Album
-    @State private var isCameraPresented = false
-    @State private var pendingExtractInput: TimelinePendingExtractInput?
-    @State private var pendingEditorInput: TimelinePendingEditorInput?
+    @State private var isCreationPresented = false
     @State private var pendingShareInput: TimelinePendingShareInput?
     @State private var isSelectionMode = false
     @State private var selectedMomentIDs: Set<UUID> = []
@@ -81,7 +79,7 @@ struct MomentsTimelineView: View {
                     .accessibilityLabel("Delete selected moments")
                 } else {
                     Button {
-                        isCameraPresented = true
+                        isCreationPresented = true
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -89,34 +87,9 @@ struct MomentsTimelineView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $isCameraPresented) {
-            CameraView(template: cameraTemplate) { image in
-                Task { @MainActor in
-                    await Task.yield()
-                    pendingExtractInput = TimelinePendingExtractInput(
-                        image: image,
-                        template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size)
-                    )
-                }
-            }
-        }
-        .fullScreenCover(item: $pendingExtractInput) { input in
-            ExtractPhotoView(image: input.image, mode: .momentCrop(template: input.template)) { output in
-                guard case .croppedMomentImage(let croppedImage) = output else {
-                    return
-                }
-
-                let nextInput = TimelinePendingEditorInput(image: croppedImage)
-
-                Task { @MainActor in
-                    await Task.yield()
-                    pendingEditorInput = nextInput
-                }
-            }
-        }
-        .fullScreenCover(item: $pendingEditorInput) { input in
+        .fullScreenCover(isPresented: $isCreationPresented) {
             NavigationStack {
-                MomentEditorView(mode: .newMoment(album: album, initialImage: input.image))
+                MomentCreationView(mode: .newMoment(album: album)) { _ in }
             }
         }
         .fullScreenCover(item: $pendingShareInput) { input in
@@ -194,17 +167,6 @@ struct MomentsTimelineView: View {
         }
     }
 
-    private var cameraTemplate: ExtractPhotoTemplate? {
-        guard album.templatePhotoSize != nil || album.templateOutlinePath != nil else {
-            return nil
-        }
-
-        return AlbumTemplateResolver.resolve(
-            for: album,
-            fallbackPhotoSize: album.templatePhotoSize ?? CGSize(width: 3, height: 4)
-        )
-    }
-
     private var isPresentingSingleDeleteAlert: Binding<Bool> {
         Binding(
             get: { pendingSingleDeleteMoment != nil },
@@ -252,17 +214,6 @@ struct MomentsTimelineView: View {
             isPresentingError = true
         }
     }
-}
-
-private struct TimelinePendingExtractInput: Identifiable {
-    let id = UUID()
-    let image: UIImage
-    let template: ExtractPhotoTemplate
-}
-
-private struct TimelinePendingEditorInput: Identifiable {
-    let id = UUID()
-    let image: UIImage
 }
 
 private struct TimelinePendingShareInput: Identifiable {

@@ -4,7 +4,7 @@ import CoreGraphics
 import UIKit
 #endif
 
-enum CameraCaptureAspect: String, CaseIterable, Identifiable {
+enum CameraCaptureAspect: String, CaseIterable, Identifiable, Codable, Sendable {
     case threeByFour
     case square
     case nineBySixteen
@@ -41,6 +41,14 @@ enum CameraCaptureAspect: String, CaseIterable, Identifiable {
 
         let nextIndex = allCases.index(after: index)
         return nextIndex == allCases.endIndex ? allCases[allCases.startIndex] : allCases[nextIndex]
+    }
+
+    static func closest(to aspectRatio: CGFloat) -> Self {
+        let candidates = Self.allCases.map { aspect in
+            (aspect: aspect, distance: abs(aspect.aspectRatio - aspectRatio))
+        }
+
+        return candidates.min { $0.distance < $1.distance }?.aspect ?? .threeByFour
     }
 }
 

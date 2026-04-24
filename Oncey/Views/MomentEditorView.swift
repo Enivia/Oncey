@@ -4,58 +4,26 @@ import SwiftUI
 import UIKit
 
 enum MomentEditorMode {
-    case newAlbum(initialImage: UIImage, templateDraft: AlbumTemplateOutlineDraft)
-    case newMoment(album: Album, initialImage: UIImage)
     case editMoment(moment: Moment)
-
-    var showsAlbumNameField: Bool {
-        if case .newAlbum = self {
-            return true
-        }
-
-        return false
-    }
 
     var navigationTitle: String {
         switch self {
-        case .newAlbum:
-            return ""
-        case .newMoment:
-            return "New Moment"
         case .editMoment:
             return "Edit Moment"
         }
     }
-
-    var autoRefreshLocation: Bool {
-        switch self {
-        case .newAlbum, .newMoment:
-            return true
-        case .editMoment:
-            return false
-        }
-    }
-}
-
-enum MomentEditorCompletion {
-    case createdAlbum(UUID)
-    case finished
 }
 
 struct MomentEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @FocusState private var isAlbumNameFocused: Bool
 
     let mode: MomentEditorMode
-    let onComplete: (MomentEditorCompletion) -> Void
+    let onComplete: () -> Void
 
-    @State private var albumName: String
     @State private var note: String
     @State private var draftImage: UIImage?
-    @State private var draftAlbumTemplate: AlbumTemplateOutlineDraft?
     @State private var locationService: CurrentLocationService
-    @State private var hasAutoRequestedLocation = false
     @State private var hasImageChanges: Bool
     @State private var isCameraPresented = false
     @State private var pendingExtractInput: PendingExtractInput?
@@ -63,30 +31,14 @@ struct MomentEditorView: View {
     @State private var isPresentingError = false
     @State private var isSaving = false
 
-    init(mode: MomentEditorMode, onComplete: @escaping (MomentEditorCompletion) -> Void = { _ in }) {
+    init(mode: MomentEditorMode, onComplete: @escaping () -> Void = {}) {
         self.mode = mode
         self.onComplete = onComplete
 
         switch mode {
-        case .newAlbum(let image, let templateDraft):
-            _albumName = State(initialValue: "")
-            _note = State(initialValue: "")
-            _draftImage = State(initialValue: image)
-            _draftAlbumTemplate = State(initialValue: templateDraft)
-            _locationService = State(initialValue: CurrentLocationService())
-            _hasImageChanges = State(initialValue: true)
-        case .newMoment(_, let image):
-            _albumName = State(initialValue: "")
-            _note = State(initialValue: "")
-            _draftImage = State(initialValue: image)
-            _draftAlbumTemplate = State(initialValue: nil)
-            _locationService = State(initialValue: CurrentLocationService())
-            _hasImageChanges = State(initialValue: true)
         case .editMoment(let moment):
-            _albumName = State(initialValue: "")
             _note = State(initialValue: moment.note)
             _draftImage = State(initialValue: ImageResourceService.platformImage(from: moment.photo))
-            _draftAlbumTemplate = State(initialValue: nil)
             _locationService = State(initialValue: CurrentLocationService(initialLocation: moment.location))
             _hasImageChanges = State(initialValue: false)
         }
@@ -116,19 +68,6 @@ struct MomentEditorView: View {
                 }
             }
 
-            if mode.showsAlbumNameField {
-                ToolbarItem(placement: .principal) {
-                    TextField("Album name", text: $albumName)
-                        .textInputAutocapitalization(.words)
-                        .multilineTextAlignment(.center)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .focused($isAlbumNameFocused)
-                        .frame(maxWidth: 220)
-                        .submitLabel(.done)
-                }
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Save") {
                     save()
@@ -147,24 +86,11 @@ struct MomentEditorView: View {
         }
         .fullScreenCover(item: $pendingExtractInput) { input in
             ExtractPhotoView(image: input.image, mode: input.mode) { output in
-                switch output {
-                case .albumTemplate(let result):
-                    draftImage = result.image
-                    draftAlbumTemplate = result.templateDraft
-                    hasImageChanges = true
-                case .croppedMomentImage(let croppedImage):
+                if case .croppedMomentImage(let croppedImage) = output {
                     draftImage = croppedImage
                     hasImageChanges = true
                 }
             }
-        }
-        .task {
-            guard mode.autoRefreshLocation, !hasAutoRequestedLocation else {
-                return
-            }
-
-            hasAutoRequestedLocation = true
-            locationService.refresh()
         }
         .alert("Something went wrong", isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
@@ -310,14 +236,6 @@ struct MomentEditorView: View {
             return
         }
 
-        if mode.showsAlbumNameField {
-            let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedAlbumName.isEmpty else {
-                isAlbumNameFocused = true
-                return
-            }
-        }
-
         guard let draftImage else {
             present("A photo is required before saving.")
             return
@@ -329,53 +247,6 @@ struct MomentEditorView: View {
             let now = Date.now
 
             switch mode {
-            case .newAlbum:
-                let templateDraft = draftAlbumTemplate ?? AlbumTemplateOutlineDraft(photoSize: draftImage.size, outlineImage: nil)
-                let outlinePath: String?
-                if let outlineImage = templateDraft.outlineImage {
-                    outlinePath = try AppImageStore.storeOutline(outlineImage)
-                } else {
-                    outlinePath = nil
-                }
-                let photoPath = try AppImageStore.store(draftImage)
-                let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
-                let album = Album(
-                    name: trimmedAlbumName,
-                    templateOutlinePath: outlinePath,
-                    templatePhotoWidth: templateDraft.photoSize.width,
-                    templatePhotoHeight: templateDraft.photoSize.height,
-                    createdAt: now,
-                    updatedAt: now
-                )
-                let moment = Moment(
-                    album: album,
-                    photo: photoPath,
-                    location: locationService.persistedValue,
-                    note: note,
-                    createdAt: now,
-                    updatedAt: now
-                )
-
-                modelContext.insert(album)
-                modelContext.insert(moment)
-                try modelContext.save()
-                onComplete(.createdAlbum(album.id))
-                dismiss()
-            case .newMoment(let album, _):
-                let photoPath = try AppImageStore.store(draftImage)
-                let moment = Moment(
-                    album: album,
-                    photo: photoPath,
-                    location: locationService.persistedValue,
-                    note: note,
-                    createdAt: now,
-                    updatedAt: now
-                )
-
-                modelContext.insert(moment)
-                try modelContext.save()
-                onComplete(.finished)
-                dismiss()
             case .editMoment(let moment):
                 if hasImageChanges {
                     moment.photo = try AppImageStore.replaceImage(at: moment.photo, with: draftImage)
@@ -386,7 +257,7 @@ struct MomentEditorView: View {
                 moment.updatedAt = now
 
                 try modelContext.save()
-                onComplete(.finished)
+                onComplete()
                 dismiss()
             }
         } catch {
@@ -403,17 +274,6 @@ struct MomentEditorView: View {
 
     private var cameraTemplate: ExtractPhotoTemplate? {
         switch mode {
-        case .newAlbum:
-            return nil
-        case .newMoment(let album, _):
-            guard album.templatePhotoSize != nil || album.templateOutlinePath != nil else {
-                return nil
-            }
-
-            return AlbumTemplateResolver.resolve(
-                for: album,
-                fallbackPhotoSize: album.templatePhotoSize ?? CGSize(width: 3, height: 4)
-            )
         case .editMoment(let moment):
             guard let album = moment.album else {
                 return nil
@@ -432,10 +292,6 @@ struct MomentEditorView: View {
 
     private func extractMode(for image: UIImage) -> ExtractPhotoMode {
         switch mode {
-        case .newAlbum:
-            return .albumTemplate
-        case .newMoment(let album, _):
-            return .momentCrop(template: AlbumTemplateResolver.resolve(for: album, fallbackPhotoSize: image.size))
         case .editMoment(let moment):
             return .momentCrop(template: AlbumTemplateResolver.resolve(for: moment.album, fallbackPhotoSize: image.size))
         }
@@ -487,20 +343,4 @@ private struct PendingExtractInput: Identifiable {
     .modelContainer(container)
 }
 
-#Preview("New Album") {
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 500)).image { ctx in
-        UIColor.systemIndigo.withAlphaComponent(0.55).setFill()
-        ctx.fill(ctx.format.bounds)
-    }
-
-    NavigationStack {
-        MomentEditorView(
-            mode: .newAlbum(
-                initialImage: image,
-                templateDraft: AlbumTemplateOutlineDraft(photoSize: image.size, outlineImage: nil)
-            )
-        )
-    }
-    .modelContainer(for: [Album.self, Moment.self], inMemory: true)
-}
 #endif

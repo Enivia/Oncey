@@ -7,9 +7,8 @@ import UIKit
 struct AlbumsListView: View {
     @Query(sort: [SortDescriptor(\Album.updatedAt, order: .reverse), SortDescriptor(\Album.createdAt, order: .reverse)]) private var albums: [Album]
     @State private var viewModel = AlbumsViewModel()
-    @State private var isCameraPresented = false
-    @State private var pendingExtractInput: AlbumsListPendingExtractInput?
-    @State private var pendingEditorInput: AlbumsListPendingEditorInput?
+    @State private var isCreationPresented = false
+    @State private var pendingTimelineAlbumID: UUID?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
 
@@ -62,41 +61,23 @@ struct AlbumsListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    isCameraPresented = true
+                    isCreationPresented = true
                 } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add album")
             }
         }
-        .fullScreenCover(isPresented: $isCameraPresented) {
-            CameraView(template: nil) { image in
-                Task { @MainActor in
-                    await Task.yield()
-                    pendingExtractInput = AlbumsListPendingExtractInput(image: image)
-                }
+        .navigationDestination(isPresented: timelineNavigationBinding) {
+            if let pendingTimelineAlbum {
+                MomentsTimelineView(album: pendingTimelineAlbum)
             }
         }
-        .fullScreenCover(item: $pendingExtractInput) { input in
-            ExtractPhotoView(image: input.image, mode: .albumTemplate) { output in
-                guard case .albumTemplate(let result) = output else {
-                    return
-                }
-
-                let nextInput = AlbumsListPendingEditorInput(
-                    image: result.image,
-                    templateDraft: result.templateDraft
-                )
-
-                Task { @MainActor in
-                    await Task.yield()
-                    pendingEditorInput = nextInput
-                }
-            }
-        }
-        .fullScreenCover(item: $pendingEditorInput) { input in
+        .fullScreenCover(isPresented: $isCreationPresented) {
             NavigationStack {
-                MomentEditorView(mode: .newAlbum(initialImage: input.image, templateDraft: input.templateDraft))
+                MomentCreationView(mode: .newAlbum) { album in
+                    pendingTimelineAlbumID = album.id
+                }
             }
         }
         .alert("Couldn't load photo", isPresented: $isPresentingError) {
@@ -105,17 +86,25 @@ struct AlbumsListView: View {
             Text(errorMessage ?? "Please try again.")
         }
     }
-}
 
-private struct AlbumsListPendingExtractInput: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
+    private var pendingTimelineAlbum: Album? {
+        guard let pendingTimelineAlbumID else {
+            return nil
+        }
 
-private struct AlbumsListPendingEditorInput: Identifiable {
-    let id = UUID()
-    let image: UIImage
-    let templateDraft: AlbumTemplateOutlineDraft
+        return albums.first { $0.id == pendingTimelineAlbumID }
+    }
+
+    private var timelineNavigationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingTimelineAlbumID != nil && pendingTimelineAlbum != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingTimelineAlbumID = nil
+                }
+            }
+        )
+    }
 }
 
 #Preview {

@@ -1,0 +1,1171 @@
+#if os(iOS)
+import SwiftData
+import SwiftUI
+import UIKit
+
+enum MomentCreationMode {
+    case newAlbum
+    case newMoment(album: Album)
+
+    var album: Album? {
+        switch self {
+        case .newAlbum:
+            return nil
+        case .newMoment(let album):
+            return album
+        }
+    }
+
+    var latestMoment: Moment? {
+        album?.moments.max { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.updatedAt < rhs.updatedAt
+            }
+
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    var isCreatingAlbum: Bool {
+        if case .newAlbum = self {
+            return true
+        }
+
+        return false
+    }
+
+    var isCreatingFirstMoment: Bool {
+        guard case .newMoment(let album) = self else {
+            return false
+        }
+
+        return album.moments.isEmpty
+    }
+
+    var showsAlbumConfigurationStep: Bool {
+        isCreatingAlbum || isCreatingFirstMoment
+    }
+
+    var showsAlbumNameField: Bool {
+        isCreatingAlbum
+    }
+}
+
+private enum MomentCreationStep: Hashable {
+    case capture
+    case configuration
+    case note
+    case success
+}
+
+private enum ReminderDecision {
+    case untouched
+    case skip
+    case set
+}
+
+private struct ReminderSelection {
+    let value: Int
+    let unit: AlbumReminderUnit
+}
+
+struct MomentCreationView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @FocusState private var isAlbumNameFocused: Bool
+    @StateObject private var camera = CameraSessionController()
+
+    let mode: MomentCreationMode
+    let onComplete: (Album) -> Void
+    let reminderClient: AlbumReminderClient
+
+    @State private var currentStep: MomentCreationStep = .capture
+    @State private var albumName: String
+    @State private var note = ""
+    @State private var selectedAspect: CameraCaptureAspect
+    @State private var capturedImage: UIImage?
+    @State private var overlayOpacity = 0.3
+    @State private var reminderValue: Int
+    @State private var reminderUnit: AlbumReminderUnit
+    @State private var reminderDecision: ReminderDecision = .untouched
+    @State private var reminderAuthorizationGranted: Bool?
+    @State private var isRequestingReminderAuthorization = false
+    @State private var locationService = CurrentLocationService()
+    @State private var hasAutoRequestedLocation = false
+    @State private var isSaving = false
+    @State private var createdAlbum: Album?
+    @State private var createdMoment: Moment?
+    @State private var previousMoment: Moment?
+    @State private var reminderScheduleOutcome: AlbumReminderScheduleOutcome?
+    @State private var errorMessage: String?
+    @State private var isPresentingError = false
+
+    init(
+        mode: MomentCreationMode,
+        onComplete: @escaping (Album) -> Void = { _ in },
+        reminderClient: AlbumReminderClient = AlbumReminderClient.live()
+    ) {
+        self.mode = mode
+        self.onComplete = onComplete
+        self.reminderClient = reminderClient
+
+        let selection = Self.initialReminderSelection(for: mode)
+        _albumName = State(initialValue: mode.album?.name ?? "")
+        _selectedAspect = State(initialValue: Self.initialAspect(for: mode))
+        _reminderValue = State(initialValue: selection.value)
+        _reminderUnit = State(initialValue: selection.unit)
+    }
+
+    var body: some View {
+        ZStack {
+            backgroundView
+
+            VStack(spacing: AppTheme.Spacing.s6) {
+                progressBar
+                    .padding(.horizontal, AppTheme.Spacing.s6)
+                    .padding(.top, AppTheme.Spacing.s2)
+
+                stepContent
+            }
+            .padding(.bottom, AppTheme.Spacing.s6)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden()
+        .toolbar { toolbarContent }
+        .toolbarBackground(currentStep == .capture ? .hidden : .visible, for: .navigationBar)
+        .toolbarColorScheme(currentStep == .capture ? .dark : .light, for: .navigationBar)
+        .onAppear {
+            updateCameraLifecycle(for: currentStep)
+        }
+        .onDisappear {
+            camera.deactivate()
+        }
+        .onChange(of: currentStep) { _, newValue in
+            updateCameraLifecycle(for: newValue)
+        }
+        .onChange(of: camera.errorMessage) { _, newValue in
+            guard let newValue else {
+                return
+            }
+
+            present(newValue)
+        }
+        .task {
+            guard !hasAutoRequestedLocation else {
+                return
+            }
+
+            hasAutoRequestedLocation = true
+            locationService.refresh()
+        }
+        .alert("Something went wrong", isPresented: $isPresentingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private var backgroundView: some View {
+        Group {
+            if currentStep == .capture {
+                Color.black.ignoresSafeArea()
+            } else {
+                AppPageBackground()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch currentStep {
+        case .capture:
+            captureStep
+        case .configuration:
+            configurationStep
+        case .note:
+            noteStep
+        case .success:
+            successStep
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            switch currentStep {
+            case .capture:
+                Button(currentStep == .capture ? "Close" : "Done", systemImage: currentStep == .capture ? "xmark" : "checkmark") {
+                    if currentStep == .success {
+                        closeAndRouteToTimeline()
+                    } else {
+                        dismiss()
+                    }
+                }
+                .foregroundStyle(currentStep == .capture ? .white : AppTheme.Colors.textPrimary)
+            case .configuration, .note, .success:
+                Button("Back", systemImage: "chevron.backward") {
+                    stepBack()
+                }
+            }
+        }
+
+        if currentStep == .capture {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    guard camera.isFlashAvailable else {
+                        return
+                    }
+
+                    camera.isFlashEnabled.toggle()
+                } label: {
+                    Image(systemName: camera.isFlashEnabled ? "bolt.fill" : "bolt.slash.fill")
+                }
+                .disabled(!camera.isFlashAvailable || capturedImage != nil)
+                .opacity(camera.isFlashAvailable && capturedImage == nil ? 1 : 0.45)
+                .foregroundStyle(.white)
+
+                if allowsAspectSelection {
+                    Button {
+                        selectedAspect = selectedAspect.next
+                    } label: {
+                        Text(selectedAspect.label)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, AppTheme.Spacing.s4)
+                            .frame(height: 40)
+                            .background(.white.opacity(0.15), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(capturedImage != nil)
+                    .opacity(capturedImage == nil ? 1 : 0.45)
+                }
+            }
+        }
+    }
+
+    private var progressBar: some View {
+        HStack(spacing: AppTheme.Spacing.s2) {
+            ForEach(Array(displayedSteps.enumerated()), id: \.offset) { index, step in
+                Capsule()
+                    .fill(index <= currentStepIndex ? progressTint(for: step) : progressTrackColor)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 6)
+            }
+        }
+    }
+
+    private var captureStep: some View {
+        GeometryReader { proxy in
+            VStack(spacing: AppTheme.Spacing.s5) {
+                Spacer(minLength: 0)
+
+                capturePreview(in: proxy.size)
+
+                if showsOverlaySlider {
+                    overlaySliderSection
+                        .padding(.horizontal, AppTheme.Spacing.s6)
+                }
+
+                captureBottomBar
+                    .padding(.horizontal, AppTheme.Spacing.s6)
+                    .padding(.bottom, max(proxy.safeAreaInsets.bottom, AppTheme.Spacing.s4))
+            }
+        }
+    }
+
+    private func capturePreview(in containerSize: CGSize) -> some View {
+        let availableSize = CGSize(
+            width: max(containerSize.width - AppTheme.Spacing.s6 * 2, 1),
+            height: max(containerSize.height * 0.62, 1)
+        )
+        let previewSize = previewFrameSize(in: availableSize)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl, style: .continuous)
+                .fill(.white.opacity(0.06))
+
+            if let capturedImage {
+                Image(uiImage: capturedImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: previewSize.width, height: previewSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+            } else if camera.authorizationState == .authorized, camera.isSessionConfigured {
+                CameraPreviewView(session: camera.session)
+                    .frame(width: previewSize.width, height: previewSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                            .stroke(.white.opacity(0.18), lineWidth: 1)
+                    }
+                    .overlay {
+                        if let latestMomentPhotoPath, latestMomentPhotoPath.isEmpty == false {
+                            LocalPhotoView(path: latestMomentPhotoPath, contentMode: .fit)
+                                .frame(width: previewSize.width, height: previewSize.height)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                                .opacity(overlayOpacity)
+                        }
+                    }
+            } else {
+                Rectangle()
+                    .fill(.white.opacity(0.08))
+                    .frame(width: previewSize.width, height: previewSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                    .overlay {
+                        permissionStateView
+                            .padding(AppTheme.Spacing.s6)
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var overlaySliderSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+            HStack {
+                Text("Overlay")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.88))
+
+                Spacer()
+
+                Text("\(Int(overlayOpacity * 100))%")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Slider(value: $overlayOpacity, in: 0 ... 0.7)
+                .tint(.white)
+        }
+        .disabled(capturedImage != nil)
+        .opacity(capturedImage == nil ? 1 : 0.45)
+    }
+
+    private var captureBottomBar: some View {
+        Group {
+            if capturedImage == nil {
+                HStack {
+                    Spacer(minLength: 0)
+
+                    Button {
+                        capturePhoto()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(.white.opacity(0.2))
+                                .frame(width: 86, height: 86)
+
+                            Circle()
+                                .stroke(.white.opacity(0.4), lineWidth: 2)
+                                .frame(width: 76, height: 76)
+
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 64, height: 64)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(camera.authorizationState != .authorized || !camera.isSessionConfigured)
+                    .opacity(camera.authorizationState == .authorized && camera.isSessionConfigured ? 1 : 0.55)
+
+                    Spacer(minLength: AppTheme.Spacing.s7)
+
+                    Button {
+                        camera.toggleCamera()
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 76, height: 76)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(camera.authorizationState != .authorized)
+                    .opacity(camera.authorizationState == .authorized ? 1 : 0.55)
+                }
+            } else {
+                HStack(spacing: AppTheme.Spacing.s3) {
+                    Button {
+                        capturedImage = nil
+                    } label: {
+                        Label("Retake", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                    .foregroundStyle(.white)
+
+                    Button {
+                        goForwardFromCapture()
+                    } label: {
+                        Text("Next")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.Colors.accent)
+                    .foregroundStyle(.black)
+                }
+            }
+        }
+    }
+
+    private var configurationStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
+                    if mode.showsAlbumNameField {
+                        TextField("Album Name", text: $albumName)
+                            .textInputAutocapitalization(.words)
+                            .submitLabel(.done)
+                            .focused($isAlbumNameFocused)
+                            .padding(.horizontal, AppTheme.Spacing.s4)
+                            .frame(height: 52)
+                            .background(AppTheme.Colors.accentSoft.opacity(0.35), in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+                    }
+
+                    Text("How often would you like to leave a memory here?")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                    HStack(spacing: AppTheme.Spacing.s3) {
+                        Picker("Value", selection: $reminderValue) {
+                            ForEach(1...30, id: \.self) { value in
+                                Text("\(value)").tag(value)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+
+                        
+                        Picker("Unit", selection: $reminderUnit) {
+                            ForEach(AlbumReminderUnit.allCases) { unit in
+                                Text(unit.title).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                    }
+                    .frame(height: 160)
+
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                        Text("We’re set. I’ll remind you to come back on \(configurationReminderText).")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                        if let capturedImage {
+                            reminderPreviewSummary(image: capturedImage)
+                        }
+                    }
+
+                    HStack(spacing: AppTheme.Spacing.s3) {
+                        Button {
+                            if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                isAlbumNameFocused = true
+                                return
+                            }
+
+                            reminderDecision = .skip
+                            reminderAuthorizationGranted = nil
+                            currentStep = .note
+                        } label: {
+                            Text("Skip reminder")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(AppTheme.Colors.accent)
+
+                        Button {
+                            Task {
+                                await handleSetReminderTapped()
+                            }
+                        } label: {
+                            if isRequestingReminderAuthorization {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Set a reminder")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.Colors.accent)
+                        .disabled(isRequestingReminderAuthorization)
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.s6)
+            .padding(.bottom, AppTheme.Spacing.s6)
+        }
+    }
+
+    private func reminderPreviewSummary(image: UIImage) -> some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.s3) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s1) {
+                Text("• \(AppDateFormatters.momentTimestamp.string(from: Date.now))")
+                Text("• See you then")
+            }
+            .font(.subheadline)
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+    }
+
+    private var noteStep: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.s6) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
+                    Text("What do you want to say?")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                    notePromptView
+
+                    noteEditor
+
+                    Button {
+                        Task {
+                            await completeCreation()
+                        }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Complete")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.Colors.accent)
+                    .disabled(isSaving)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.s6)
+            .padding(.bottom, AppTheme.Spacing.s6)
+        }
+    }
+
+    @ViewBuilder
+    private var notePromptView: some View {
+        if let latestMoment {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                Text(AppDateFormatters.momentTimestamp.string(from: latestMoment.createdAt))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                Text(latestMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No note on the last moment." : "\"\(latestMoment.note)\"")
+                    .font(.body)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+            }
+            .padding(AppTheme.Spacing.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        } else {
+            Text("Write a sentence for your future self who comes back here.")
+                .font(.body)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+    }
+
+    private var noteEditor: some View {
+        ZStack(alignment: .topLeading) {
+            MomentCreationNoteEditorBackground()
+
+            TextEditor(text: $note)
+                .frame(height: 180)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, AppTheme.Spacing.s4)
+                .padding(.vertical, AppTheme.Spacing.s2)
+                .background(Color.clear)
+
+            if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("A single sentence for your future self...")
+                    .font(.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary.opacity(0.7))
+                    .padding(.horizontal, AppTheme.Spacing.s5)
+                    .padding(.vertical, AppTheme.Spacing.s5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                .stroke(AppTheme.Colors.border, lineWidth: 1)
+        }
+    }
+
+    private var successStep: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.s6) {
+                if let previousMoment, let createdMoment {
+                    comparisonSuccessView(previousMoment: previousMoment, createdMoment: createdMoment)
+                } else {
+                    firstMomentSuccessView
+                }
+
+                Button {
+                    closeAndRouteToTimeline()
+                } label: {
+                    Text("Timeline")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.Colors.accent)
+            }
+            .padding(.horizontal, AppTheme.Spacing.s6)
+            .padding(.bottom, AppTheme.Spacing.s6)
+        }
+    }
+
+    private var firstMomentSuccessView: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.accent)
+
+            Text(successTitle)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+
+            Text(successMessage)
+                .font(.body)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+
+            if let createdAlbum, let remindAt = createdAlbum.remindAt {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                    Text("Reminder")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                    Text(AppDateFormatters.momentTimestamp.string(from: remindAt))
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                    if reminderScheduleOutcome == .savedWithoutSystemAuthorization {
+                        Text("Reminder saved, but notifications are turned off in Settings.")
+                            .font(.footnote)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(AppTheme.Spacing.s4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+            }
+        }
+    }
+
+    private func comparisonSuccessView(previousMoment: Moment, createdMoment: Moment) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.s3) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                    Text(AppDateFormatters.momentTimestamp.string(from: previousMoment.createdAt))
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    LocalPhotoView(path: previousMoment.photo)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                }
+
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                    Text(AppDateFormatters.momentTimestamp.string(from: createdMoment.createdAt))
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    LocalPhotoView(path: createdMoment.photo)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                }
+            }
+
+            if createdMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                Text(createdMoment.note)
+                    .font(.body)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+            }
+
+            timelineSummaryView(count: createdMoment.album?.moments.count ?? 0)
+        }
+    }
+
+    private func timelineSummaryView(count: Int) -> some View {
+        HStack(spacing: AppTheme.Spacing.s2) {
+            ForEach(0..<max(count, 1), id: \.self) { index in
+                Circle()
+                    .fill(AppTheme.Colors.accent)
+                    .frame(width: 8, height: 8)
+
+                if index < max(count, 1) - 1 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.accent.opacity(0.35))
+                        .frame(width: 20, height: 2)
+                }
+            }
+
+            Spacer(minLength: AppTheme.Spacing.s4)
+
+            Text("Moment \(count) has been captured")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+        .padding(AppTheme.Spacing.s4)
+        .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+    }
+
+    private func stepCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4, content: content)
+            .padding(AppTheme.Spacing.s6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl, style: .continuous))
+            .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
+    }
+
+    private var permissionStateView: some View {
+        VStack(spacing: AppTheme.Spacing.s4) {
+            Image(systemName: permissionIconName)
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(.white.opacity(0.92))
+
+            Text(permissionTitle)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Text(permissionMessage)
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.72))
+        }
+    }
+
+    private var permissionIconName: String {
+        switch camera.authorizationState {
+        case .denied, .restricted:
+            return "camera.fill.badge.ellipsis"
+        case .unavailable:
+            return "camera.metering.unknown"
+        case .authorized, .unknown:
+            return "camera"
+        }
+    }
+
+    private var permissionTitle: String {
+        switch camera.authorizationState {
+        case .denied:
+            return "Camera access is off"
+        case .restricted:
+            return "Camera access is restricted"
+        case .unavailable:
+            return "Camera unavailable"
+        case .authorized:
+            return "Starting camera"
+        case .unknown:
+            return "Requesting camera access"
+        }
+    }
+
+    private var permissionMessage: String {
+        switch camera.authorizationState {
+        case .denied:
+            return "Enable camera access in Settings to take a new photo."
+        case .restricted:
+            return "This device currently restricts camera access."
+        case .unavailable:
+            return "This environment doesn't provide a usable camera."
+        case .authorized:
+            return "Preparing the capture session."
+        case .unknown:
+            return "Waiting for camera permission."
+        }
+    }
+
+    private var displayedSteps: [MomentCreationStep] {
+        if mode.showsAlbumConfigurationStep {
+            return [.capture, .configuration, .note, .success]
+        }
+
+        return [.capture, .note, .success]
+    }
+
+    private var currentStepIndex: Int {
+        displayedSteps.firstIndex(of: currentStep) ?? 0
+    }
+
+    private var progressTrackColor: Color {
+        currentStep == .capture ? .white.opacity(0.16) : AppTheme.Colors.border
+    }
+
+    private func progressTint(for step: MomentCreationStep) -> Color {
+        currentStep == .capture ? .white : AppTheme.Colors.accent
+    }
+
+    private var latestMomentPhotoPath: String? {
+        mode.latestMoment?.photo
+    }
+
+    private var latestMoment: Moment? {
+        previousMoment ?? mode.latestMoment
+    }
+
+    private var showsOverlaySlider: Bool {
+        latestMomentPhotoPath != nil && mode.isCreatingAlbum == false
+    }
+
+    private var allowsAspectSelection: Bool {
+        switch mode {
+        case .newAlbum:
+            return true
+        case .newMoment(let album):
+            return album.moments.isEmpty && album.ratio == nil
+        }
+    }
+
+    private var configurationReminderText: String {
+        guard let date = AlbumReminderService.reminderDate(from: .now, value: reminderValue, unit: reminderUnit) else {
+            return "another time"
+        }
+
+        return AppDateFormatters.momentTimestamp.string(from: date)
+    }
+
+    private var successTitle: String {
+        if mode.isCreatingAlbum {
+            return "Album created"
+        }
+
+        return "Moment captured"
+    }
+
+    private var successMessage: String {
+        if reminderScheduleOutcome == .savedWithoutSystemAuthorization {
+            return "Your moment is saved and the reminder is stored, but notifications are currently turned off."
+        }
+
+        if mode.isCreatingFirstMoment {
+            return "Your first moment is ready. Come back anytime to see how this place changes."
+        }
+
+        return "Everything is saved. Keep building the timeline one moment at a time."
+    }
+
+    private func updateCameraLifecycle(for step: MomentCreationStep) {
+        if step == .capture, capturedImage == nil {
+            camera.activate()
+        } else {
+            camera.deactivate()
+        }
+    }
+
+    private func capturePhoto() {
+        camera.capturePhoto { result in
+            switch result {
+            case .success(let image):
+                capturedImage = CameraImageCropper.croppedImage(image, aspect: selectedAspect)
+                camera.deactivate()
+            case .failure(let error):
+                present(error.localizedDescription)
+            }
+        }
+    }
+
+    private func goForwardFromCapture() {
+        if mode.showsAlbumConfigurationStep {
+            currentStep = .configuration
+        } else {
+            currentStep = .note
+        }
+    }
+
+    private func stepBack() {
+        switch currentStep {
+        case .configuration:
+            currentStep = .capture
+        case .note:
+            currentStep = mode.showsAlbumConfigurationStep ? .configuration : .capture
+        case .capture, .success:
+            break
+        }
+    }
+
+    private func completeCreation() async {
+        guard !isSaving else {
+            return
+        }
+
+        guard let capturedImage else {
+            present("A photo is required before continuing.")
+            return
+        }
+
+        if mode.showsAlbumNameField {
+            let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedAlbumName.isEmpty else {
+                isAlbumNameFocused = true
+                return
+            }
+        }
+
+        isSaving = true
+
+        do {
+            let now = Date.now
+            let photoPath = try AppImageStore.store(capturedImage)
+            let previousMoment = mode.latestMoment
+            let album = try prepareAlbumForSave(at: now)
+            let moment = Moment(
+                album: album,
+                photo: photoPath,
+                location: locationService.persistedValue,
+                note: note,
+                createdAt: now,
+                updatedAt: now
+            )
+
+            if mode.isCreatingAlbum {
+                modelContext.insert(album)
+            }
+
+            modelContext.insert(moment)
+            try modelContext.save()
+
+            let scheduleOutcome = try await finalizeReminderIfNeeded(for: album)
+            if scheduleOutcome != nil {
+                try modelContext.save()
+            }
+
+            self.previousMoment = previousMoment
+            createdAlbum = album
+            createdMoment = moment
+            reminderScheduleOutcome = scheduleOutcome
+            currentStep = .success
+        } catch {
+            present(error.localizedDescription)
+        }
+
+        isSaving = false
+    }
+
+    private func prepareAlbumForSave(at now: Date) throws -> Album {
+        switch mode {
+        case .newAlbum:
+            let album = Album(
+                name: albumName.trimmingCharacters(in: .whitespacesAndNewlines),
+                ratio: selectedAspect,
+                createdAt: now,
+                updatedAt: now
+            )
+
+            if reminderDecision == .set {
+                try AlbumReminderService.storeReminder(
+                    on: album,
+                    value: reminderValue,
+                    unit: reminderUnit,
+                    baseDate: now
+                )
+            }
+
+            return album
+        case .newMoment(let album):
+            if album.ratio == nil {
+                album.ratio = selectedAspect
+            }
+            album.updatedAt = now
+
+            if mode.showsAlbumConfigurationStep {
+                switch reminderDecision {
+                case .set:
+                    try AlbumReminderService.storeReminder(
+                        on: album,
+                        value: reminderValue,
+                        unit: reminderUnit,
+                        baseDate: now
+                    )
+                case .skip:
+                    album.remindValue = nil
+                    album.remindUnit = nil
+                    album.remindAt = nil
+                case .untouched:
+                    break
+                }
+            }
+
+            return album
+        }
+    }
+
+    private func finalizeReminderIfNeeded(for album: Album) async throws -> AlbumReminderScheduleOutcome? {
+        guard mode.showsAlbumConfigurationStep else {
+            return nil
+        }
+
+        switch reminderDecision {
+        case .set:
+            if let reminderAuthorizationGranted {
+                return try await AlbumReminderService.scheduleStoredReminder(
+                    for: album,
+                    authorizationGranted: reminderAuthorizationGranted,
+                    client: reminderClient
+                )
+            }
+
+            return try await AlbumReminderService.scheduleStoredReminder(for: album, client: reminderClient)
+        case .skip:
+            AlbumReminderService.removeScheduledReminder(for: album, client: reminderClient)
+            return nil
+        case .untouched:
+            return nil
+        }
+    }
+
+    private func closeAndRouteToTimeline() {
+        guard let album = createdAlbum ?? mode.album else {
+            dismiss()
+            return
+        }
+
+        onComplete(album)
+        dismiss()
+    }
+
+    private func previewFrameSize(in containerSize: CGSize) -> CGSize {
+        let availableSize = CGSize(
+            width: max(containerSize.width, 1),
+            height: max(containerSize.height, 1)
+        )
+        let sourceSize = CGSize(width: selectedAspect.aspectRatio * 1_000, height: 1_000)
+        return CameraGeometry.fittedSize(for: sourceSize, in: availableSize)
+    }
+
+    private func present(_ message: String) {
+        errorMessage = message
+        isPresentingError = true
+    }
+
+    private func handleSetReminderTapped() async {
+        if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            isAlbumNameFocused = true
+            return
+        }
+
+        reminderDecision = .set
+        isRequestingReminderAuthorization = true
+
+        do {
+            reminderAuthorizationGranted = try await reminderClient.requestAuthorization()
+        } catch {
+            reminderAuthorizationGranted = false
+            present("Reminder access couldn't be confirmed. We'll still save the reminder, but iOS notifications may stay off.")
+        }
+
+        isRequestingReminderAuthorization = false
+        currentStep = .note
+    }
+
+    private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
+        if let album = mode.album,
+           let remindValue = album.remindValue,
+           let remindUnit = album.remindUnit {
+            return ReminderSelection(value: remindValue, unit: remindUnit)
+        }
+
+        return ReminderSelection(value: 1, unit: .month)
+    }
+
+    private static func initialAspect(for mode: MomentCreationMode) -> CameraCaptureAspect {
+        guard let album = mode.album else {
+            return .threeByFour
+        }
+
+        if let ratio = album.ratio {
+            return ratio
+        }
+
+        if let templateAspectRatio = album.templatePhotoAspectRatio {
+            return CameraCaptureAspect.closest(to: CGFloat(templateAspectRatio))
+        }
+
+        if let latestMoment = mode.latestMoment,
+           let imageSize = ImageResourceService.imageSize(from: latestMoment.photo),
+           imageSize.width > 0,
+           imageSize.height > 0 {
+            return CameraCaptureAspect.closest(to: imageSize.width / imageSize.height)
+        }
+
+        return .threeByFour
+    }
+}
+
+private struct MomentCreationNoteEditorBackground: View {
+    private let lineSpacing: CGFloat = 32
+    private let topInset: CGFloat = 36
+
+    var body: some View {
+        Canvas(rendersAsynchronously: true) { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(AppTheme.Colors.surface))
+
+            for y in stride(from: topInset, through: size.height, by: lineSpacing) {
+                var line = Path()
+                line.move(to: CGPoint(x: AppTheme.Spacing.s4, y: y))
+                line.addLine(to: CGPoint(x: size.width - AppTheme.Spacing.s4, y: y))
+                context.stroke(line, with: .color(AppTheme.Colors.accentSoft.opacity(0.8)), lineWidth: 1)
+            }
+        }
+    }
+}
+
+private enum MomentCreationPreviewSupport {
+    static let reminderClient = AlbumReminderClient(
+        requestAuthorization: { false },
+        addRequest: { _ in },
+        removeRequests: { _ in }
+    )
+
+    static func makeContainer() -> ModelContainer {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try! ModelContainer(for: Album.self, Moment.self, configurations: configuration)
+    }
+
+    static func makeAlbumWithMoment(in container: ModelContainer) -> Album {
+        let album = Album(name: "Sunday Walk", ratio: .threeByFour)
+        container.mainContext.insert(album)
+        container.mainContext.insert(Moment(
+            album: album,
+            photo: "",
+            location: "West Lake, Hangzhou",
+            note: "Soft light, still water, and a quiet walk.",
+            createdAt: Date(timeIntervalSince1970: 1_713_628_800),
+            updatedAt: Date(timeIntervalSince1970: 1_713_628_800)
+        ))
+        return album
+    }
+}
+
+#Preview("New Album") {
+    let container = MomentCreationPreviewSupport.makeContainer()
+
+    return NavigationStack {
+        MomentCreationView(
+            mode: .newAlbum,
+            reminderClient: MomentCreationPreviewSupport.reminderClient
+        )
+    }
+    .modelContainer(container)
+}
+
+#Preview("New Moment") {
+    let container = MomentCreationPreviewSupport.makeContainer()
+    let album = MomentCreationPreviewSupport.makeAlbumWithMoment(in: container)
+
+    return NavigationStack {
+        MomentCreationView(
+            mode: .newMoment(album: album),
+            reminderClient: MomentCreationPreviewSupport.reminderClient
+        )
+    }
+    .modelContainer(container)
+}
+#endif

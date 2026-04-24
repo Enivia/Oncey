@@ -11,6 +11,10 @@ import SwiftData
 final class Album {
     @Attribute(.unique) var id: UUID
     var name: String
+    var ratio: CameraCaptureAspect?
+    var remindValue: Int?
+    var remindUnit: AlbumReminderUnit?
+    var remindAt: Date?
     var templateOutlinePath: String?
     var templatePhotoWidth: Double?
     var templatePhotoHeight: Double?
@@ -21,6 +25,10 @@ final class Album {
     init(
         id: UUID = UUID(),
         name: String,
+        ratio: CameraCaptureAspect? = nil,
+        remindValue: Int? = nil,
+        remindUnit: AlbumReminderUnit? = nil,
+        remindAt: Date? = nil,
         templateOutlinePath: String? = nil,
         templatePhotoWidth: Double? = nil,
         templatePhotoHeight: Double? = nil,
@@ -30,6 +38,10 @@ final class Album {
     ) {
         self.id = id
         self.name = name
+        self.ratio = ratio
+        self.remindValue = remindValue
+        self.remindUnit = remindUnit
+        self.remindAt = remindAt
         self.templateOutlinePath = templateOutlinePath
         self.templatePhotoWidth = templatePhotoWidth
         self.templatePhotoHeight = templatePhotoHeight
@@ -40,6 +52,10 @@ final class Album {
 }
 
 extension Album {
+    var hasReminder: Bool {
+        remindValue != nil && remindUnit != nil && remindAt != nil
+    }
+
     var templatePhotoSize: CGSize? {
         guard let templatePhotoWidth, let templatePhotoHeight,
               templatePhotoWidth > 0, templatePhotoHeight > 0 else {
