@@ -144,6 +144,49 @@ enum CameraGeometry {
             height: sourceSize.height * scale
         )
     }
+
+    static func cropRect(
+        for sourceSize: CGSize,
+        previewSize: CGSize,
+        cropSize: CGSize,
+        zoomScale: CGFloat,
+        offset: CGSize
+    ) -> CGRect {
+        guard sourceSize.width > 0,
+              sourceSize.height > 0,
+              previewSize.width > 0,
+              previewSize.height > 0,
+              cropSize.width > 0,
+              cropSize.height > 0 else {
+            return .zero
+        }
+
+        let safeZoomScale = max(zoomScale, 1)
+        let baseCoverScale = max(cropSize.width / previewSize.width, cropSize.height / previewSize.height)
+        let renderedWidth = previewSize.width * baseCoverScale * safeZoomScale
+        let renderedHeight = previewSize.height * baseCoverScale * safeZoomScale
+
+        guard renderedWidth > 0, renderedHeight > 0 else {
+            return .zero
+        }
+
+        let visibleWidth = sourceSize.width * cropSize.width / renderedWidth
+        let visibleHeight = sourceSize.height * cropSize.height / renderedHeight
+        let centeredOriginX = (sourceSize.width - visibleWidth) / 2
+        let centeredOriginY = (sourceSize.height - visibleHeight) / 2
+        let translatedOriginX = centeredOriginX - (offset.width * sourceSize.width / renderedWidth)
+        let translatedOriginY = centeredOriginY - (offset.height * sourceSize.height / renderedHeight)
+
+        let maxOriginX = max(sourceSize.width - visibleWidth, 0)
+        let maxOriginY = max(sourceSize.height - visibleHeight, 0)
+
+        return CGRect(
+            x: min(max(translatedOriginX, 0), maxOriginX),
+            y: min(max(translatedOriginY, 0), maxOriginY),
+            width: visibleWidth,
+            height: visibleHeight
+        )
+    }
 }
 
 #if canImport(UIKit)
@@ -151,6 +194,31 @@ enum CameraImageCropper {
     static func croppedImage(_ image: UIImage, aspect: CameraCaptureAspect) -> UIImage {
         let normalizedImage = normalized(image)
         let cropRect = CameraGeometry.cropRect(for: normalizedImage.size, aspect: aspect)
+
+        return croppedImage(normalizedImage, cropRect: cropRect)
+    }
+
+    static func croppedImage(
+        _ image: UIImage,
+        previewSize: CGSize,
+        cropSize: CGSize,
+        zoomScale: CGFloat,
+        offset: CGSize
+    ) -> UIImage {
+        let normalizedImage = normalized(image)
+        let cropRect = CameraGeometry.cropRect(
+            for: normalizedImage.size,
+            previewSize: previewSize,
+            cropSize: cropSize,
+            zoomScale: zoomScale,
+            offset: offset
+        )
+
+        return croppedImage(normalizedImage, cropRect: cropRect)
+    }
+
+    private static func croppedImage(_ image: UIImage, cropRect: CGRect) -> UIImage {
+        let normalizedImage = normalized(image)
 
         guard cropRect.width > 0,
               cropRect.height > 0,

@@ -62,6 +62,51 @@ struct CameraGeometryTests {
         #expect(isClose(layout?.frame.height ?? -1, 533.3333, tolerance: 0.01))
     }
 
+    @Test func interactiveCropStartsCenteredWhenNoOffsetApplied() {
+        let cropRect = CameraGeometry.cropRect(
+            for: CGSize(width: 400, height: 800),
+            previewSize: CGSize(width: 100, height: 200),
+            cropSize: CGSize(width: 100, height: 100),
+            zoomScale: 1,
+            offset: .zero
+        )
+
+        #expect(isClose(cropRect.origin.x, 0))
+        #expect(isClose(cropRect.origin.y, 200))
+        #expect(isClose(cropRect.width, 400))
+        #expect(isClose(cropRect.height, 400))
+    }
+
+    @Test func interactiveCropRespectsZoomAndOffset() {
+        let cropRect = CameraGeometry.cropRect(
+            for: CGSize(width: 400, height: 800),
+            previewSize: CGSize(width: 100, height: 200),
+            cropSize: CGSize(width: 100, height: 100),
+            zoomScale: 2,
+            offset: CGSize(width: 25, height: -20)
+        )
+
+        #expect(isClose(cropRect.origin.x, 50))
+        #expect(isClose(cropRect.origin.y, 340))
+        #expect(isClose(cropRect.width, 200))
+        #expect(isClose(cropRect.height, 200))
+    }
+
+    @Test func interactiveCropClampsToImageBounds() {
+        let cropRect = CameraGeometry.cropRect(
+            for: CGSize(width: 400, height: 800),
+            previewSize: CGSize(width: 100, height: 200),
+            cropSize: CGSize(width: 100, height: 100),
+            zoomScale: 2,
+            offset: CGSize(width: 300, height: 300)
+        )
+
+        #expect(isClose(cropRect.origin.x, 0))
+        #expect(isClose(cropRect.origin.y, 0))
+        #expect(isClose(cropRect.width, 200))
+        #expect(isClose(cropRect.height, 200))
+    }
+
     private func isClose(_ lhs: CGFloat, _ rhs: CGFloat, tolerance: CGFloat = 0.001) -> Bool {
         abs(lhs - rhs) <= tolerance
     }

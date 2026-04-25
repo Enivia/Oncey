@@ -1,4 +1,5 @@
 #if os(iOS)
+import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
@@ -69,6 +70,37 @@ private struct ReminderSelection {
     let unit: AlbumReminderUnit
 }
 
+private enum MomentCreationNavigationDirection {
+    case forward
+    case backward
+}
+
+private enum MomentCreationCaptureSource {
+    case camera
+    case photoLibrary
+}
+
+private struct MomentCreationCaptureDraft {
+    let image: UIImage
+    let source: MomentCreationCaptureSource
+}
+
+private enum MomentCreationPreviewCropMode {
+    case none
+    case adjustable
+    case fixed(CameraCaptureAspect)
+}
+
+private struct MomentCreationCaptureLayout {
+    let stageSize: CGSize
+    let frameSize: CGSize
+    let previewSize: CGSize
+    let cropSize: CGSize
+    let sliderTopOffset: CGFloat?
+    let topBarHeight: CGFloat
+    let bottomBarHeight: CGFloat
+}
+
 struct MomentCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -83,7 +115,14 @@ struct MomentCreationView: View {
     @State private var albumName: String
     @State private var note = ""
     @State private var selectedAspect: CameraCaptureAspect
-    @State private var capturedImage: UIImage?
+    @State private var captureDraft: MomentCreationCaptureDraft?
+    @State private var preparedImage: UIImage?
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var captureCropOffset: CGSize = .zero
+    @State private var committedCaptureCropOffset: CGSize = .zero
+    @State private var captureCropZoomScale: CGFloat = 1
+    @State private var committedCaptureCropZoomScale: CGFloat = 1
+    @State private var navigationDirection: MomentCreationNavigationDirection = .forward
     @State private var overlayOpacity = 0.3
     @State private var reminderValue: Int
     @State private var reminderUnit: AlbumReminderUnit
@@ -120,18 +159,19 @@ struct MomentCreationView: View {
         ZStack {
             backgroundView
 
-            VStack(spacing: AppTheme.Spacing.s6) {
+            VStack(spacing:  AppTheme.Spacing.s6) {
                 progressBar
                     .padding(.horizontal, AppTheme.Spacing.s6)
-                    .padding(.top, AppTheme.Spacing.s2)
+                    .padding(.top, currentStep == .capture ? 0 : AppTheme.Spacing.s2)
 
                 stepContent
             }
-            .padding(.bottom, AppTheme.Spacing.s6)
+            .padding(.bottom, currentStep == .capture ? 0 : AppTheme.Spacing.s6)
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .toolbar { toolbarContent }
+        .toolbar(currentStep == .capture ? .hidden : .visible, for: .navigationBar)
         .toolbarBackground(currentStep == .capture ? .hidden : .visible, for: .navigationBar)
         .toolbarColorScheme(currentStep == .capture ? .dark : .light, for: .navigationBar)
         .onAppear {
@@ -142,6 +182,25 @@ struct MomentCreationView: View {
         }
         .onChange(of: currentStep) { _, newValue in
             updateCameraLifecycle(for: newValue)
+        }
+        .onChange(of: selectedPhotoItem) { _, newValue in
+            guard let newValue else {
+                return
+            }
+
+            Task {
+                await loadSelectedImage(from: newValue)
+            }
+        }
+        .onChange(of: isShowingCapturePreview) { _, _ in
+            updateCameraLifecycle(for: currentStep)
+        }
+        .onChange(of: selectedAspect) { _, _ in
+            preparedImage = nil
+
+            if isShowingInteractiveCaptureCrop {
+                resetCaptureCropTransform()
+            }
         }
         .onChange(of: camera.errorMessage) { _, newValue in
             guard let newValue else {
@@ -177,68 +236,45 @@ struct MomentCreationView: View {
 
     @ViewBuilder
     private var stepContent: some View {
-        switch currentStep {
-        case .capture:
-            captureStep
-        case .configuration:
-            configurationStep
-        case .note:
-            noteStep
-        case .success:
-            successStep
+        ZStack {
+            if currentStep == .capture {
+                captureStep
+                    .transition(stepTransition)
+            }
+
+            if currentStep == .configuration {
+                configurationStep
+                    .transition(stepTransition)
+            }
+
+            if currentStep == .note {
+                noteStep
+                    .transition(stepTransition)
+            }
+
+            if currentStep == .success {
+                successStep
+                    .transition(stepTransition)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             switch currentStep {
-            case .capture:
-                Button(currentStep == .capture ? "Close" : "Done", systemImage: currentStep == .capture ? "xmark" : "checkmark") {
-                    if currentStep == .success {
-                        closeAndRouteToTimeline()
-                    } else {
-                        dismiss()
-                    }
-                }
-                .foregroundStyle(currentStep == .capture ? .white : AppTheme.Colors.textPrimary)
-            case .configuration, .note, .success:
+            case .configuration, .note:
                 Button("Back", systemImage: "chevron.backward") {
                     stepBack()
                 }
-            }
-        }
-
-        if currentStep == .capture {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    guard camera.isFlashAvailable else {
-                        return
-                    }
-
-                    camera.isFlashEnabled.toggle()
-                } label: {
-                    Image(systemName: camera.isFlashEnabled ? "bolt.fill" : "bolt.slash.fill")
+            case .success:
+                Button("Done", systemImage: "checkmark") {
+                    closeAndRouteToTimeline()
                 }
-                .disabled(!camera.isFlashAvailable || capturedImage != nil)
-                .opacity(camera.isFlashAvailable && capturedImage == nil ? 1 : 0.45)
-                .foregroundStyle(.white)
-
-                if allowsAspectSelection {
-                    Button {
-                        selectedAspect = selectedAspect.next
-                    } label: {
-                        Text(selectedAspect.label)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, AppTheme.Spacing.s4)
-                            .frame(height: 40)
-                            .background(.white.opacity(0.15), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(capturedImage != nil)
-                    .opacity(capturedImage == nil ? 1 : 0.45)
-                }
+            case .capture:
+                EmptyView()
             }
         }
     }
@@ -256,244 +292,313 @@ struct MomentCreationView: View {
 
     private var captureStep: some View {
         GeometryReader { proxy in
-            VStack(spacing: AppTheme.Spacing.s5) {
+            let layout = captureLayout(in: proxy)
+
+            VStack(spacing: 0) {
+                captureStage(layout: layout)
+
                 Spacer(minLength: 0)
-
-                capturePreview(in: proxy.size)
-
-                if showsOverlaySlider {
-                    overlaySliderSection
-                        .padding(.horizontal, AppTheme.Spacing.s6)
-                }
-
-                captureBottomBar
-                    .padding(.horizontal, AppTheme.Spacing.s6)
-                    .padding(.bottom, max(proxy.safeAreaInsets.bottom, AppTheme.Spacing.s4))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 
-    private func capturePreview(in containerSize: CGSize) -> some View {
-        let availableSize = CGSize(
-            width: max(containerSize.width - AppTheme.Spacing.s6 * 2, 1),
-            height: max(containerSize.height * 0.62, 1)
-        )
-        let previewSize = previewFrameSize(in: availableSize)
+    private func captureStage(layout: MomentCreationCaptureLayout) -> some View {
+        ZStack {
+            Color.black
 
-        return ZStack {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl, style: .continuous)
-                .fill(.white.opacity(0.06))
+            captureFrameContent(layout: layout)
+                .frame(width: layout.frameSize.width, height: layout.frameSize.height)
+                .frame(width: layout.stageSize.width, height: layout.stageSize.height, alignment: .center)
 
-            if let capturedImage {
-                Image(uiImage: capturedImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: previewSize.width, height: previewSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-            } else if camera.authorizationState == .authorized, camera.isSessionConfigured {
-                CameraPreviewView(session: camera.session)
-                    .frame(width: previewSize.width, height: previewSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                            .stroke(.white.opacity(0.18), lineWidth: 1)
-                    }
-                    .overlay {
-                        if let latestMomentPhotoPath, latestMomentPhotoPath.isEmpty == false {
-                            LocalPhotoView(path: latestMomentPhotoPath, contentMode: .fit)
-                                .frame(width: previewSize.width, height: previewSize.height)
-                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                                .opacity(overlayOpacity)
-                        }
-                    }
-            } else {
-                Rectangle()
-                    .fill(.white.opacity(0.08))
-                    .frame(width: previewSize.width, height: previewSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                    .overlay {
-                        permissionStateView
-                            .padding(AppTheme.Spacing.s6)
-                    }
+            VStack(spacing: 0) {
+                captureTopBar
+                    .frame(height: layout.topBarHeight)
+                    .padding(.top, AppTheme.Spacing.s2)
+                    .padding(.horizontal, AppTheme.Spacing.s2)
+
+                Spacer(minLength: 0)
+                
+                overlaySliderSection
+                    .padding(.horizontal, AppTheme.Spacing.s2)
+                    .frame(height: captureAuxiliaryAreaHeight)
+                    .frame(maxWidth: .infinity, alignment: .top)
+
+                captureBottomBar(layout: layout)
+                    .frame(height: layout.bottomBarHeight)
+                    .padding(.top, AppTheme.Spacing.s7)
+                    .padding(.horizontal, AppTheme.Spacing.s5)
             }
         }
+        .frame(width: layout.stageSize.width, height: layout.stageSize.height)
         .frame(maxWidth: .infinity)
     }
 
-    private var overlaySliderSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-            HStack {
-                Text("Overlay")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.88))
+    @ViewBuilder
+    private func captureFrameContent(layout: MomentCreationCaptureLayout) -> some View {
+        if let captureDraft {
+            capturePreviewImageStage(captureDraft, layout: layout)
+        } else if camera.authorizationState == .authorized, camera.isSessionConfigured {
+            CameraPreviewView(session: camera.session)
+                .frame(width: layout.frameSize.width, height: layout.frameSize.height)
+                .overlay {
+                    Rectangle()
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+                .overlay {
+                    if let latestMomentPhotoPath, latestMomentPhotoPath.isEmpty == false {
+                        LocalPhotoView(path: latestMomentPhotoPath, contentMode: .fit)
+                            .frame(width: layout.frameSize.width, height: layout.frameSize.height)
+                            .opacity(overlayOpacity)
+                    }
+                }
+        } else {
+            Rectangle()
+                .fill(.white.opacity(0.08))
+                .frame(width: layout.frameSize.width, height: layout.frameSize.height)
+                .overlay {
+                    permissionStateView
+                        .padding(AppTheme.Spacing.s6)
+                }
+        }
+    }
 
-                Spacer()
-
-                Text("\(Int(overlayOpacity * 100))%")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.72))
+    private var captureTopBar: some View {
+        HStack(spacing: AppTheme.Spacing.s3) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark").frame(width: 24, height: 24)
             }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+
+            Spacer(minLength: AppTheme.Spacing.s4)
+
+            HStack(spacing: AppTheme.Spacing.s2) {
+                if showsFlashControl {
+                    Button(action: {
+                        guard camera.isFlashAvailable else {
+                            return
+                        }
+                        
+                        camera.isFlashEnabled.toggle()
+                    }) {
+                        Image(systemName: camera.isFlashEnabled ? "bolt.fill" : "bolt.slash.fill")
+                            .frame(width: 24, height: 24)
+                    }
+                    .disabled(!camera.isFlashAvailable)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                }
+
+                if showsAspectControl {
+                    Button {
+                        preparedImage = nil
+                        selectedAspect = selectedAspect.next
+                    } label: {
+                        Text(selectedAspect.label).frame(width:40, height: 24)
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func capturePreviewImageStage(
+        _ captureDraft: MomentCreationCaptureDraft,
+        layout: MomentCreationCaptureLayout
+    ) -> some View {
+        if isShowingInteractiveCaptureCrop {
+            MomentCreationCropCanvas(
+                image: captureDraft.image,
+                containerSize: layout.frameSize,
+                previewSize: layout.previewSize,
+                cropSize: layout.cropSize,
+                zoomScale: $captureCropZoomScale,
+                committedZoomScale: $committedCaptureCropZoomScale,
+                offset: $captureCropOffset,
+                committedOffset: $committedCaptureCropOffset
+            )
+        } else {
+            Image(uiImage: captureDraft.image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: layout.frameSize.width, height: layout.frameSize.height)
+                .clipped()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var overlaySliderSection: some View {
+        HStack(spacing: AppTheme.Spacing.s5) {
+            Text("Mask")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.88))
 
             Slider(value: $overlayOpacity, in: 0 ... 0.7)
                 .tint(.white)
         }
-        .disabled(capturedImage != nil)
-        .opacity(capturedImage == nil ? 1 : 0.45)
     }
 
-    private var captureBottomBar: some View {
-        Group {
-            if capturedImage == nil {
-                HStack {
-                    Spacer(minLength: 0)
-
-                    Button {
-                        capturePhoto()
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(.white.opacity(0.2))
-                                .frame(width: 86, height: 86)
-
-                            Circle()
-                                .stroke(.white.opacity(0.4), lineWidth: 2)
-                                .frame(width: 76, height: 76)
-
-                            Circle()
-                                .fill(.white)
-                                .frame(width: 64, height: 64)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(camera.authorizationState != .authorized || !camera.isSessionConfigured)
-                    .opacity(camera.authorizationState == .authorized && camera.isSessionConfigured ? 1 : 0.55)
-
-                    Spacer(minLength: AppTheme.Spacing.s7)
-
-                    Button {
-                        camera.toggleCamera()
-                    } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 76, height: 76)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(camera.authorizationState != .authorized)
-                    .opacity(camera.authorizationState == .authorized ? 1 : 0.55)
+    @ViewBuilder
+    private func captureBottomBar(layout: MomentCreationCaptureLayout) -> some View {
+        if isShowingCapturePreview {
+            HStack(spacing: AppTheme.Spacing.s3) {
+                Button {
+                    resetCaptureDraft()
+                } label: {
+                    Label("Retake", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
                 }
-            } else {
-                HStack(spacing: AppTheme.Spacing.s3) {
-                    Button {
-                        capturedImage = nil
-                    } label: {
-                        Label("Retake", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
-                    .foregroundStyle(.white)
+                .buttonStyle(.bordered)
+                .tint(.white)
+                .foregroundStyle(.white)
 
-                    Button {
-                        goForwardFromCapture()
-                    } label: {
-                        Text("Next")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.Colors.accent)
-                    .foregroundStyle(.black)
+                Button {
+                    goForwardFromCapture(using: layout)
+                } label: {
+                    Text("Next")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.Colors.accent)
+                .foregroundStyle(.black)
             }
+            .padding(.horizontal, AppTheme.Spacing.s6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            HStack {
+                PhotosPicker(
+                    selection: $selectedPhotoItem,
+                    matching: .images,
+                    preferredItemEncoding: .current
+                ) {
+                    Image(systemName: "photo.on.rectangle").font(.system(size: 20, weight: .medium))
+                }
+                .tint(AppTheme.Colors.accent)
+                .accessibilityLabel("Album")
+
+                Spacer(minLength: AppTheme.Spacing.s7)
+
+                Button {
+                    capturePhoto()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(0.2))
+                            .frame(width: 80, height: 80)
+
+                        Circle()
+                            .stroke(.white.opacity(0.4), lineWidth: 2)
+                            .frame(width: 68, height: 68)
+
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 60, height: 60)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(camera.authorizationState != .authorized || !camera.isSessionConfigured)
+                .opacity(camera.authorizationState == .authorized && camera.isSessionConfigured ? 1 : 0.55)
+
+                Spacer(minLength: AppTheme.Spacing.s7)
+
+                Button {
+                    camera.toggleCamera()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(camera.authorizationState != .authorized)
+                .opacity(camera.authorizationState == .authorized ? 1 : 0.55)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
     private var configurationStep: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
-                    if mode.showsAlbumNameField {
-                        TextField("Album Name", text: $albumName)
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.done)
-                            .focused($isAlbumNameFocused)
-                            .padding(.horizontal, AppTheme.Spacing.s4)
-                            .frame(height: 52)
-                            .background(AppTheme.Colors.accentSoft.opacity(0.35), in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
-                    }
+        fixedFooterStep {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
+                if mode.showsAlbumNameField {
+                    TextField("Album Name", text: $albumName)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        .focused($isAlbumNameFocused)
+                        .padding(.horizontal, AppTheme.Spacing.s4)
+                        .frame(height: 52)
+                        .background(AppTheme.Colors.accentSoft.opacity(0.35), in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+                }
 
-                    Text("How often would you like to leave a memory here?")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("How often would you like to leave a memory here?")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                    HStack(spacing: AppTheme.Spacing.s3) {
-                        Picker("Value", selection: $reminderValue) {
-                            ForEach(1...30, id: \.self) { value in
-                                Text("\(value)").tag(value)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-
-                        
-                        Picker("Unit", selection: $reminderUnit) {
-                            ForEach(AlbumReminderUnit.allCases) { unit in
-                                Text(unit.title).tag(unit)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                    }
-                    .frame(height: 160)
-
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                        Text("We’re set. I’ll remind you to come back on \(configurationReminderText).")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                        if let capturedImage {
-                            reminderPreviewSummary(image: capturedImage)
+                HStack(spacing: AppTheme.Spacing.s3) {
+                    Picker("Value", selection: $reminderValue) {
+                        ForEach(1...30, id: \.self) { value in
+                            Text("\(value)").tag(value)
                         }
                     }
+                    .pickerStyle(.wheel)
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
 
-                    HStack(spacing: AppTheme.Spacing.s3) {
-                        Button {
-                            if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                isAlbumNameFocused = true
-                                return
-                            }
-
-                            reminderDecision = .skip
-                            reminderAuthorizationGranted = nil
-                            currentStep = .note
-                        } label: {
-                            Text("Skip reminder")
-                                .frame(maxWidth: .infinity)
+                    Picker("Unit", selection: $reminderUnit) {
+                        ForEach(AlbumReminderUnit.allCases) { unit in
+                            Text(unit.title).tag(unit)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(AppTheme.Colors.accent)
+                    }
+                    .pickerStyle(.wheel)
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                }
+                .frame(height: 160)
 
-                        Button {
-                            Task {
-                                await handleSetReminderTapped()
-                            }
-                        } label: {
-                            if isRequestingReminderAuthorization {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity)
-                            } else {
-                                Text("Set a reminder")
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.Colors.accent)
-                        .disabled(isRequestingReminderAuthorization)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                    Text("We’re set. I’ll remind you to come back on \(configurationReminderText).")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    if let preparedImage {
+                        reminderPreviewSummary(image: preparedImage)
                     }
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.s6)
-            .padding(.bottom, AppTheme.Spacing.s6)
+        } footer: {
+            HStack(spacing: AppTheme.Spacing.s3) {
+                Button {
+                    if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        isAlbumNameFocused = true
+                        return
+                    }
+
+                    reminderDecision = .skip
+                    reminderAuthorizationGranted = nil
+                    navigate(to: .note, direction: .forward)
+                } label: {
+                    Text("Skip reminder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppTheme.Colors.accent)
+
+                Button {
+                    Task {
+                        await handleSetReminderTapped()
+                    }
+                } label: {
+                    if isRequestingReminderAuthorization {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Set a reminder")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.Colors.accent)
+                .disabled(isRequestingReminderAuthorization)
+            }
         }
     }
 
@@ -515,49 +620,46 @@ struct MomentCreationView: View {
     }
 
     private var noteStep: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.s6) {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
-                    Text("What do you want to say?")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+        fixedFooterStep {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
+                Text("What do you want to say?")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
 
-                    notePromptView
+                notePromptView
 
-                    noteEditor
-
-                    Button {
-                        Task {
-                            await completeCreation()
-                        }
-                    } label: {
-                        if isSaving {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Complete")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.Colors.accent)
-                    .disabled(isSaving)
+                noteEditor
+            }
+        } footer: {
+            Button {
+                Task {
+                    await completeCreation()
+                }
+            } label: {
+                if isSaving {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Complete")
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.s6)
-            .padding(.bottom, AppTheme.Spacing.s6)
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.Colors.accent)
+            .disabled(isSaving)
         }
     }
 
     @ViewBuilder
     private var notePromptView: some View {
-        if let latestMoment {
+        if let latestMoment,
+           latestMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
                 Text(AppDateFormatters.momentTimestamp.string(from: latestMoment.createdAt))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
 
-                Text(latestMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No note on the last moment." : "\"\(latestMoment.note)\"")
+                Text("\"\(latestMoment.note)\"")
                     .font(.body)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
             }
@@ -618,6 +720,38 @@ struct MomentCreationView: View {
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
             .padding(.bottom, AppTheme.Spacing.s6)
+        }
+    }
+
+    private func fixedFooterStep<Content: View, Footer: View>(
+        @ViewBuilder content: @escaping () -> Content,
+        @ViewBuilder footer: @escaping () -> Footer
+    ) -> some View {
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
+                        content()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, AppTheme.Spacing.s6)
+                    .padding(.top, AppTheme.Spacing.s2)
+                    .padding(.bottom, AppTheme.Spacing.s6)
+                }
+
+                VStack(spacing: AppTheme.Spacing.s3) {
+                    footer()
+                }
+                .padding(.horizontal, AppTheme.Spacing.s6)
+                .padding(.top, AppTheme.Spacing.s4)
+                .padding(.bottom, max(proxy.safeAreaInsets.bottom, AppTheme.Spacing.s4))
+                .background(AppTheme.Colors.background)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(AppTheme.Colors.divider)
+                        .frame(height: 1)
+                }
+            }
         }
     }
 
@@ -771,11 +905,11 @@ struct MomentCreationView: View {
     private var permissionMessage: String {
         switch camera.authorizationState {
         case .denied:
-            return "Enable camera access in Settings to take a new photo."
+            return "Enable camera access in Settings to take a new photo, or use Album below to choose one."
         case .restricted:
-            return "This device currently restricts camera access."
+            return "This device currently restricts camera access. You can still choose an image from Album below."
         case .unavailable:
-            return "This environment doesn't provide a usable camera."
+            return "This environment doesn't provide a usable camera. You can still choose an image from Album below."
         case .authorized:
             return "Preparing the capture session."
         case .unknown:
@@ -801,6 +935,79 @@ struct MomentCreationView: View {
 
     private func progressTint(for step: MomentCreationStep) -> Color {
         currentStep == .capture ? .white : AppTheme.Colors.accent
+    }
+
+    private var stepTransition: AnyTransition {
+        let insertionEdge: Edge = navigationDirection == .forward ? .trailing : .leading
+        let removalEdge: Edge = navigationDirection == .forward ? .leading : .trailing
+
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
+    }
+
+    private var isShowingCapturePreview: Bool {
+        captureDraft != nil
+    }
+
+    private var showsFlashControl: Bool {
+        isShowingCapturePreview == false
+    }
+
+    private var showsAspectControl: Bool {
+        if isShowingCapturePreview == false {
+            return allowsAspectSelection
+        }
+
+        if case .photoLibrary = captureDraft?.source,
+           case .adjustable = previewCropMode {
+            return true
+        }
+
+        return false
+    }
+
+    private var previewCropMode: MomentCreationPreviewCropMode {
+        guard let captureDraft else {
+            return .none
+        }
+
+        return capturePreviewCropMode(for: captureDraft.source)
+    }
+
+    private var previewCropAspect: CameraCaptureAspect {
+        switch previewCropMode {
+        case .none, .adjustable:
+            return selectedAspect
+        case .fixed(let aspect):
+            return aspect
+        }
+    }
+
+    private var isShowingInteractiveCaptureCrop: Bool {
+        switch previewCropMode {
+        case .none:
+            return false
+        case .adjustable, .fixed:
+            return true
+        }
+    }
+
+    private var shouldShowOverlaySlider: Bool {
+        showsOverlaySlider && isShowingCapturePreview == false
+    }
+
+    private var captureAuxiliaryAreaHeight: CGFloat {
+        shouldShowOverlaySlider ? 58 : 0
+    }
+
+    private var captureTopBarHeight: CGFloat {
+        52
+    }
+
+    private var captureBottomBarHeight: CGFloat {
+        90
     }
 
     private var latestMomentPhotoPath: String? {
@@ -853,7 +1060,7 @@ struct MomentCreationView: View {
     }
 
     private func updateCameraLifecycle(for step: MomentCreationStep) {
-        if step == .capture, capturedImage == nil {
+        if step == .capture, captureDraft == nil {
             camera.activate()
         } else {
             camera.deactivate()
@@ -864,28 +1071,34 @@ struct MomentCreationView: View {
         camera.capturePhoto { result in
             switch result {
             case .success(let image):
-                capturedImage = CameraImageCropper.croppedImage(image, aspect: selectedAspect)
-                camera.deactivate()
+                setCaptureDraft(CameraImageCropper.croppedImage(image, aspect: selectedAspect), source: .camera)
             case .failure(let error):
                 present(error.localizedDescription)
             }
         }
     }
 
-    private func goForwardFromCapture() {
+    private func goForwardFromCapture(using layout: MomentCreationCaptureLayout) {
+        guard captureDraft != nil else {
+            present("A photo is required before continuing.")
+            return
+        }
+
+        preparedImage = exportPreparedImage(using: layout)
+
         if mode.showsAlbumConfigurationStep {
-            currentStep = .configuration
+            navigate(to: .configuration, direction: .forward)
         } else {
-            currentStep = .note
+            navigate(to: .note, direction: .forward)
         }
     }
 
     private func stepBack() {
         switch currentStep {
         case .configuration:
-            currentStep = .capture
+            navigate(to: .capture, direction: .backward)
         case .note:
-            currentStep = mode.showsAlbumConfigurationStep ? .configuration : .capture
+            navigate(to: mode.showsAlbumConfigurationStep ? .configuration : .capture, direction: .backward)
         case .capture, .success:
             break
         }
@@ -896,7 +1109,7 @@ struct MomentCreationView: View {
             return
         }
 
-        guard let capturedImage else {
+        guard let preparedImage else {
             present("A photo is required before continuing.")
             return
         }
@@ -913,7 +1126,7 @@ struct MomentCreationView: View {
 
         do {
             let now = Date.now
-            let photoPath = try AppImageStore.store(capturedImage)
+            let photoPath = try AppImageStore.store(preparedImage)
             let previousMoment = mode.latestMoment
             let album = try prepareAlbumForSave(at: now)
             let moment = Moment(
@@ -941,7 +1154,7 @@ struct MomentCreationView: View {
             createdAlbum = album
             createdMoment = moment
             reminderScheduleOutcome = scheduleOutcome
-            currentStep = .success
+            navigate(to: .success, direction: .forward)
         } catch {
             present(error.localizedDescription)
         }
@@ -1031,18 +1244,125 @@ struct MomentCreationView: View {
         dismiss()
     }
 
-    private func previewFrameSize(in containerSize: CGSize) -> CGSize {
-        let availableSize = CGSize(
-            width: max(containerSize.width, 1),
-            height: max(containerSize.height, 1)
+    private func captureLayout(in proxy: GeometryProxy) -> MomentCreationCaptureLayout {
+        let stageWidth = max(proxy.size.width, 1)
+        let stageHeight = stageWidth / CameraCaptureAspect.nineBySixteen.aspectRatio
+        let frameAspect = currentCaptureDisplayAspect
+        let frameHeight = stageWidth / max(frameAspect.aspectRatio, 0.01)
+        let frameSize = CGSize(width: stageWidth, height: frameHeight)
+        let threeByFourHeight = stageWidth / CameraCaptureAspect.threeByFour.aspectRatio
+        let previewSize = if let captureDraft, captureDraft.source == .photoLibrary {
+            imagePreviewSize(for: captureDraft.image, in: frameSize)
+        } else {
+            frameSize
+        }
+        let cropSize = isShowingInteractiveCaptureCrop
+            ? frameSize
+            : .zero
+        let sliderTopOffset = shouldShowOverlaySlider
+            ? ((stageHeight - threeByFourHeight) / 2 + threeByFourHeight - captureAuxiliaryAreaHeight)
+            : nil
+
+        return MomentCreationCaptureLayout(
+            stageSize: CGSize(width: stageWidth, height: stageHeight),
+            frameSize: frameSize,
+            previewSize: previewSize,
+            cropSize: cropSize,
+            sliderTopOffset: sliderTopOffset,
+            topBarHeight: captureTopBarHeight,
+            bottomBarHeight: captureBottomBarHeight
         )
-        let sourceSize = CGSize(width: selectedAspect.aspectRatio * 1_000, height: 1_000)
-        return CameraGeometry.fittedSize(for: sourceSize, in: availableSize)
+    }
+
+    private func imagePreviewSize(for image: UIImage, in containerSize: CGSize) -> CGSize {
+        CameraGeometry.fittedSize(for: image.size, in: containerSize)
+    }
+
+    private func capturePreviewCropMode(for source: MomentCreationCaptureSource) -> MomentCreationPreviewCropMode {
+        if source == .camera {
+            return .none
+        }
+
+        if allowsAspectSelection {
+            return .adjustable
+        }
+
+        if source == .photoLibrary, let fixedAspect = mode.album?.ratio {
+            return .fixed(fixedAspect)
+        }
+
+        return .none
+    }
+
+    private func exportPreparedImage(using layout: MomentCreationCaptureLayout) -> UIImage {
+        guard let captureDraft else {
+            return preparedImage ?? UIImage()
+        }
+
+        switch previewCropMode {
+        case .adjustable, .fixed:
+            return CameraImageCropper.croppedImage(
+                captureDraft.image,
+                previewSize: layout.previewSize,
+                cropSize: layout.cropSize,
+                zoomScale: captureCropZoomScale,
+                offset: captureCropOffset
+            )
+        case .none:
+            return captureDraft.image
+        }
+    }
+
+    private func setCaptureDraft(_ image: UIImage, source: MomentCreationCaptureSource) {
+        captureDraft = MomentCreationCaptureDraft(image: image, source: source)
+        preparedImage = nil
+        resetCaptureCropTransform()
+    }
+
+    private func resetCaptureDraft() {
+        captureDraft = nil
+        preparedImage = nil
+        resetCaptureCropTransform()
+    }
+
+    private func resetCaptureCropTransform() {
+        captureCropOffset = .zero
+        committedCaptureCropOffset = .zero
+        captureCropZoomScale = 1
+        committedCaptureCropZoomScale = 1
+    }
+
+    private func navigate(to step: MomentCreationStep, direction: MomentCreationNavigationDirection) {
+        navigationDirection = direction
+
+        withAnimation(.easeInOut(duration: 0.28)) {
+            currentStep = step
+        }
     }
 
     private func present(_ message: String) {
         errorMessage = message
         isPresentingError = true
+    }
+
+    private func loadSelectedImage(from item: PhotosPickerItem) async {
+        do {
+            let image = try await PhotosPickerImageLoader.loadImage(from: item)
+            setCaptureDraft(image, source: .photoLibrary)
+        } catch {
+            present(error.localizedDescription)
+        }
+
+        selectedPhotoItem = nil
+    }
+
+    private var currentCaptureDisplayAspect: CameraCaptureAspect {
+        switch captureDraft?.source {
+        case .photoLibrary:
+            return previewCropAspect
+        case .camera, .none:
+            return selectedAspect
+        }
     }
 
     private func handleSetReminderTapped() async {
@@ -1062,7 +1382,7 @@ struct MomentCreationView: View {
         }
 
         isRequestingReminderAuthorization = false
-        currentStep = .note
+        navigate(to: .note, direction: .forward)
     }
 
     private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
