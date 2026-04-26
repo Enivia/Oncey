@@ -61,7 +61,59 @@ struct CameraMaskLayout: Equatable {
     }
 }
 
+struct CameraCaptureStageLayout: Equatable {
+    let stageRect: CGRect
+    let referenceRect: CGRect
+    let frameRect: CGRect
+    let maskSliderBottomY: CGFloat
+    let captureControlsBottomY: CGFloat
+}
+
 enum CameraGeometry {
+    static func captureStageLayout(
+        stageWidth: CGFloat,
+        aspect: CameraCaptureAspect,
+        bottomInset: CGFloat
+    ) -> CameraCaptureStageLayout {
+        let safeStageWidth = max(stageWidth, 1)
+        let safeBottomInset = max(bottomInset, 0)
+        let stageHeight = safeStageWidth / CameraCaptureAspect.nineBySixteen.aspectRatio
+        let referenceHeight = safeStageWidth / CameraCaptureAspect.threeByFour.aspectRatio
+        let frameHeight = safeStageWidth / max(aspect.aspectRatio, 0.01)
+        let stageRect = CGRect(x: 0, y: 0, width: safeStageWidth, height: stageHeight)
+        let referenceRect = CGRect(
+            x: 0,
+            y: stageRect.minY,
+            width: safeStageWidth,
+            height: referenceHeight
+        )
+
+        let frameMinY: CGFloat
+        switch aspect {
+        case .square:
+            frameMinY = referenceRect.minY + (referenceRect.height - frameHeight) / 2
+        case .threeByFour:
+            frameMinY = referenceRect.minY
+        case .nineBySixteen:
+            frameMinY = stageRect.minY
+        }
+
+        let frameRect = CGRect(
+            x: 0,
+            y: frameMinY,
+            width: safeStageWidth,
+            height: frameHeight
+        )
+
+        return CameraCaptureStageLayout(
+            stageRect: stageRect,
+            referenceRect: referenceRect,
+            frameRect: frameRect,
+            maskSliderBottomY: referenceRect.maxY - safeBottomInset,
+            captureControlsBottomY: stageRect.maxY - safeBottomInset
+        )
+    }
+
     static func cropRect(for sourceSize: CGSize, aspect: CameraCaptureAspect) -> CGRect {
         cropRect(for: sourceSize, aspectRatio: aspect.aspectRatio)
     }

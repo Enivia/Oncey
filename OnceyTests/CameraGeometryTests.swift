@@ -4,6 +4,54 @@ import Testing
 
 struct CameraGeometryTests {
 
+    @Test func captureStageLayoutPinsThreeByFourReferenceToTopOfNineBySixteenStage() {
+        let layout = CameraGeometry.captureStageLayout(
+            stageWidth: 360,
+            aspect: .threeByFour,
+            bottomInset: 8
+        )
+
+        #expect(isClose(layout.stageRect.minX, 0))
+        #expect(isClose(layout.stageRect.minY, 0))
+        #expect(isClose(layout.stageRect.width, 360))
+        #expect(isClose(layout.stageRect.height, 640))
+        #expect(isClose(layout.referenceRect.minY, 0))
+        #expect(isClose(layout.referenceRect.height, 480))
+        #expect(layout.frameRect == layout.referenceRect)
+        #expect(isClose(layout.maskSliderBottomY, 472))
+        #expect(isClose(layout.captureControlsBottomY, 632))
+    }
+
+    @Test func captureStageLayoutCentersSquareInsideTopAlignedThreeByFourReference() {
+        let layout = CameraGeometry.captureStageLayout(
+            stageWidth: 360,
+            aspect: .square,
+            bottomInset: 8
+        )
+
+        #expect(isClose(layout.referenceRect.minY, 0))
+        #expect(isClose(layout.referenceRect.height, 480))
+        #expect(isClose(layout.frameRect.minY, 60))
+        #expect(isClose(layout.frameRect.height, 360))
+        #expect(isClose(layout.frameRect.width, 360))
+        #expect(isClose(layout.maskSliderBottomY, 472))
+        #expect(isClose(layout.captureControlsBottomY, 632))
+    }
+
+    @Test func captureStageLayoutUsesFullNineBySixteenStageWhenRequested() {
+        let layout = CameraGeometry.captureStageLayout(
+            stageWidth: 360,
+            aspect: .nineBySixteen,
+            bottomInset: 8
+        )
+
+        #expect(layout.frameRect == layout.stageRect)
+        #expect(isClose(layout.referenceRect.minY, 0))
+        #expect(isClose(layout.referenceRect.height, 480))
+        #expect(isClose(layout.maskSliderBottomY, 472))
+        #expect(isClose(layout.captureControlsBottomY, 632))
+    }
+
     @Test func aspectCycleUsesRequestedOrder() {
         #expect(CameraCaptureAspect.threeByFour.next == .square)
         #expect(CameraCaptureAspect.square.next == .nineBySixteen)
