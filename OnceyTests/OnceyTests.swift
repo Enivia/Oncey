@@ -11,33 +11,58 @@ struct OnceyTests {
     @Test func imageStorePersistsAndReplacesManagedFiles() throws {
         let originalPath = try AppImageStore.store(makeImage(color: .systemPink))
         defer { AppImageStore.deleteImageIfManaged(at: originalPath) }
+        let originalURL = try resolvedLocalFileURL(for: originalPath)
 
         #expect(AppImageStore.isManagedPath(originalPath))
-        #expect(FileManager.default.fileExists(atPath: originalPath))
+        #expect(FileManager.default.fileExists(atPath: originalURL.path(percentEncoded: false)))
 
         let replacedPath = try AppImageStore.replaceImage(at: originalPath, with: makeImage(color: .systemBlue))
+        let replacedURL = try resolvedLocalFileURL(for: replacedPath)
 
         #expect(replacedPath == originalPath)
-        #expect(FileManager.default.fileExists(atPath: replacedPath))
+        #expect(FileManager.default.fileExists(atPath: replacedURL.path(percentEncoded: false)))
+    }
+
+    @Test func storedManagedImageReferencesArePortable() throws {
+        let storedReference = try AppImageStore.store(makeImage(color: .systemIndigo))
+        defer { AppImageStore.deleteImageIfManaged(at: storedReference) }
+
+        #expect(!storedReference.hasPrefix("/"))
+        #expect(ImageResourceService.platformImage(from: storedReference) != nil)
+        #expect(AppImageStore.isManagedPath(storedReference))
+    }
+
+    @Test func legacyManagedAbsoluteImagePathsResolveToCurrentStore() throws {
+        let storedReference = try AppImageStore.store(makeImage(color: .systemIndigo))
+        defer { AppImageStore.deleteImageIfManaged(at: storedReference) }
+
+        let fileName = try #require(ImageResourceService.fileURL(for: storedReference)?.lastPathComponent)
+        let legacyPath = "/legacy-container/Library/Application Support/MomentPhotos/\(fileName)"
+
+        #expect(!FileManager.default.fileExists(atPath: legacyPath))
+        #expect(ImageResourceService.platformImage(from: legacyPath) != nil)
+        #expect(AppImageStore.isManagedPath(legacyPath))
     }
 
     @Test func outlineStorePersistsAndReplacesManagedFiles() throws {
         let originalPath = try AppImageStore.storeOutline(makeImage(color: .clear, strokeColor: .systemYellow))
         defer { AppImageStore.deleteOutlineIfManaged(at: originalPath) }
+        let originalURL = try resolvedLocalFileURL(for: originalPath)
 
         #expect(AppImageStore.isManagedPath(originalPath))
-        #expect(FileManager.default.fileExists(atPath: originalPath))
+        #expect(FileManager.default.fileExists(atPath: originalURL.path(percentEncoded: false)))
 
         let replacedPath = try AppImageStore.replaceOutline(
             at: originalPath,
             with: makeImage(color: .clear, strokeColor: .systemRed)
         )
+        let replacedURL = try resolvedLocalFileURL(for: replacedPath)
 
         #expect(replacedPath == originalPath)
-        #expect(FileManager.default.fileExists(atPath: replacedPath))
+        #expect(FileManager.default.fileExists(atPath: replacedURL.path(percentEncoded: false)))
 
         AppImageStore.deleteOutlineIfManaged(at: replacedPath)
-        #expect(!FileManager.default.fileExists(atPath: replacedPath))
+        #expect(!FileManager.default.fileExists(atPath: replacedURL.path(percentEncoded: false)))
     }
 
     @MainActor
@@ -89,6 +114,7 @@ struct OnceyTests {
         let context = ModelContext(container)
         let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
         let photoPath = try AppImageStore.store(makeImage(color: .systemGreen))
+        let photoURL = try resolvedLocalFileURL(for: photoPath)
 
         let album = Album(name: "Cleanup Trip", createdAt: createdAt, updatedAt: createdAt)
         let moment = Moment(
@@ -107,7 +133,7 @@ struct OnceyTests {
 
         let remainingMoments = try context.fetch(FetchDescriptor<Moment>())
         #expect(remainingMoments.isEmpty)
-        #expect(!FileManager.default.fileExists(atPath: photoPath))
+    #expect(!FileManager.default.fileExists(atPath: photoURL.path(percentEncoded: false)))
     }
 
     @MainActor
@@ -399,6 +425,10 @@ struct OnceyTests {
         let schema = Schema([Album.self, Moment.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func resolvedLocalFileURL(for reference: String) throws -> URL {
+        try #require(ImageResourceService.fileURL(for: reference))
     }
 
 }

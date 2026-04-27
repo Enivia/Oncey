@@ -12,16 +12,16 @@ import AppKit
 
 enum ImageResourceService {
     static func fileURL(for path: String) -> URL? {
-        guard !path.isEmpty else {
-            return nil
-        }
-
-        return URL(fileURLWithPath: path)
+        AppImageStore.fileURL(for: path)
     }
 
 #if os(iOS)
     static func platformImage(from path: String) -> UIImage? {
-        UIImage(contentsOfFile: path)
+        guard let resolvedPath = fileURL(for: path)?.path(percentEncoded: false) else {
+            return nil
+        }
+
+        return UIImage(contentsOfFile: resolvedPath)
     }
 
     static func imageSize(from path: String) -> CGSize? {
@@ -29,7 +29,11 @@ enum ImageResourceService {
     }
 #elseif os(macOS)
     static func platformImage(from path: String) -> NSImage? {
-        NSImage(contentsOfFile: path)
+        guard let resolvedPath = fileURL(for: path)?.path(percentEncoded: false) else {
+            return nil
+        }
+
+        return NSImage(contentsOfFile: resolvedPath)
     }
 
     static func imageSize(from path: String) -> CGSize? {
