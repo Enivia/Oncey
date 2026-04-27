@@ -1,13 +1,11 @@
 import SwiftUI
 import SwiftData
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct AlbumsListView: View {
     @Query(sort: [SortDescriptor(\Album.updatedAt, order: .reverse), SortDescriptor(\Album.createdAt, order: .reverse)]) private var albums: [Album]
     @State private var viewModel = AlbumsViewModel()
     @State private var isCreationPresented = false
+    @State private var reminderCreationTarget: ReminderCreationTarget?
     @State private var pendingTimelineAlbumID: UUID?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
@@ -16,44 +14,50 @@ struct AlbumsListView: View {
         ZStack {
             AppPageBackground(style: .dotted)
 
-            GeometryReader { proxy in
-                let albumCardWidth = proxy.size.width * AppTheme.Layout.albumCardWidthRatio
-
-                Group {
-                    if albums.isEmpty {
-                        ContentUnavailableView(
-                            "No albums yet",
-                            systemImage: "photo.on.rectangle.angled",
-                            description: Text("Create your first album from the add button.")
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: AppTheme.Spacing.s3) {
-                                ForEach(albums) { album in
-                                    HStack(spacing: 0) {
-                                        Spacer(minLength: 0)
-
-                                        NavigationLink {
-                                            MomentsTimelineView(album: album)
-                                        } label: {
-                                            AlbumCardView(
-                                                album: album,
-                                                coverPhotoPath: viewModel.coverPhotoPath(for: album),
-                                                momentCountText: viewModel.momentCountText(for: album),
-                                                layerCount: viewModel.layerCount(for: album)
-                                            )
-                                            .frame(width: albumCardWidth)
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        Spacer(minLength: 0)
-                                    }
+            Group {
+                if albums.isEmpty {
+                    ContentUnavailableView(
+                        "No albums yet",
+                        systemImage: "photo.on.rectangle.angled",
+                        description: Text("Create your first album from the add button.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: AppTheme.Spacing.s6) {
+                            if let reminderAlbum,
+                               let reminderText = viewModel.reminderBannerText(for: reminderAlbum) {
+                                Button {
+                                    reminderCreationTarget = ReminderCreationTarget(id: reminderAlbum.id)
+                                } label: {
+                                    AlbumReminderEntryView(
+                                        albumName: reminderAlbum.name,
+                                        reminderText: reminderText
+                                    )
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .padding(.horizontal, AppTheme.Spacing.s4)
-                            .padding(.vertical, AppTheme.Spacing.s6)
+
+                            ForEach(albums) { album in
+                                NavigationLink {
+                                    MomentsTimelineView(album: album)
+                                } label: {
+                                    AlbumCardView(
+                                        album: album,
+                                        coverPhotoPath: viewModel.coverPhotoPath(for: album),
+                                        momentCountText: viewModel.momentCountText(for: album),
+                                        layerCount: viewModel.layerCount(for: album),
+                                        latestMomentCreatedText: viewModel.latestMomentCreatedText(for: album),
+                                        reminderCountdownText: viewModel.reminderCountdownText(for: album),
+                                        displayedMomentNodeCount: viewModel.displayedMomentNodeCount(for: album),
+                                        showsReminderNode: viewModel.showsReminderNode(for: album)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
+                        .padding(.horizontal, AppTheme.Spacing.s6)
+                        .padding(.vertical, AppTheme.Spacing.s6)
                     }
                 }
             }
@@ -80,11 +84,26 @@ struct AlbumsListView: View {
                 }
             }
         }
+        .fullScreenCover(item: $reminderCreationTarget) { target in
+            if let album = albums.first(where: { $0.id == target.id }) {
+                NavigationStack {
+                    MomentCreationView(mode: .newMoment(album: album)) { album in
+                        pendingTimelineAlbumID = album.id
+                    }
+                }
+            } else {
+                EmptyView()
+            }
+        }
         .alert("Couldn't load photo", isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "Please try again.")
         }
+    }
+
+    private var reminderAlbum: Album? {
+        viewModel.nextReminderAlbum(in: albums)
     }
 
     private var pendingTimelineAlbum: Album? {
@@ -107,29 +126,94 @@ struct AlbumsListView: View {
     }
 }
 
+private struct ReminderCreationTarget: Identifiable {
+    let id: UUID
+}
+
+private struct AlbumReminderEntryView: View {
+    let albumName: String
+    let reminderText: String
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.s5) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                Text(albumName)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+
+                Text(reminderText)
+                    .font(.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .frame(width: 16, height: 16)
+                .foregroundStyle(AppTheme.Colors.textSecondary.opacity(0.6))
+        }
+        .padding(AppTheme.Spacing.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+                .fill(AppTheme.Colors.surface)
+                .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Album.self, Moment.self, configurations: config)
+    let now = Date.now
 
-    let album1 = Album(name: "Tokyo Trip 2024")
+    let album1 = Album(
+        name: "Tokyo Trip 2024",
+        createdAt: now.addingTimeInterval(-86_400 * 30),
+        updatedAt: now.addingTimeInterval(-86_400 * 2)
+    )
     container.mainContext.insert(album1)
     container.mainContext.insert(Moment(
-        album: album1, photo: "", location: "Shibuya, Tokyo",
+        album: album1,
+        photo: "",
+        location: "Shibuya, Tokyo",
         note: "Golden hour at the famous crossing.",
-        createdAt: Date(timeIntervalSince1970: 1_713_628_800)
+        createdAt: now.addingTimeInterval(-86_400 * 10)
     ))
     container.mainContext.insert(Moment(
-        album: album1, photo: "", location: "Shinjuku, Tokyo",
+        album: album1,
+        photo: "",
+        location: "Shinjuku, Tokyo",
         note: "Neon signs and night-market energy.",
-        createdAt: Date(timeIntervalSince1970: 1_713_715_200)
+        createdAt: now.addingTimeInterval(-86_400 * 2)
     ))
+    album1.remindValue = 1
+    album1.remindUnit = .week
+    album1.remindAt = now.addingTimeInterval(86_400 * 4)
 
-    let album2 = Album(name: "Weekend Escape")
+    let album2 = Album(
+        name: "Weekend Escape",
+        createdAt: now.addingTimeInterval(-86_400 * 20),
+        updatedAt: now.addingTimeInterval(-86_400)
+    )
     container.mainContext.insert(album2)
     container.mainContext.insert(Moment(
-        album: album2, photo: "", location: "Lake District, UK",
-        note: "Misty morning hike along the shore."
+        album: album2,
+        photo: "",
+        location: "Lake District, UK",
+        note: "Misty morning hike along the shore.",
+        createdAt: now.addingTimeInterval(-86_400)
     ))
+
+    let album3 = Album(
+        name: "No Record Yet",
+        createdAt: now.addingTimeInterval(-86_400 * 8),
+        updatedAt: now.addingTimeInterval(-86_400 * 8)
+    )
+    container.mainContext.insert(album3)
 
     return NavigationStack {
         AlbumsListView()
