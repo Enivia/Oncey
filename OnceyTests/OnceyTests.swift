@@ -94,7 +94,6 @@ struct OnceyTests {
         let moment = Moment(
             album: album,
             photo: photoPath,
-            location: "Osaka, Japan",
             note: "Delete me",
             createdAt: createdAt,
             updatedAt: createdAt
@@ -120,7 +119,6 @@ struct OnceyTests {
         let moment = Moment(
             album: album,
             photo: photoPath,
-            location: "Kyoto, Japan",
             note: "Export this card",
             createdAt: Date(timeIntervalSince1970: 1_713_744_000),
             updatedAt: Date(timeIntervalSince1970: 1_713_744_000)
@@ -157,7 +155,6 @@ struct OnceyTests {
         let firstMoment = Moment(
             album: album,
             photo: "/tmp/first.jpg",
-            location: "Kyoto, Japan",
             note: "First stop",
             createdAt: createdAt,
             updatedAt: createdAt
@@ -184,7 +181,6 @@ struct OnceyTests {
         let secondMoment = Moment(
             album: album,
             photo: "/tmp/second.jpg",
-            location: "Kyoto, Japan",
             note: "Lantern street",
             createdAt: secondMomentCreatedAt,
             updatedAt: secondMomentCreatedAt
@@ -198,7 +194,6 @@ struct OnceyTests {
 
         let originalCreatedAt = firstMoment.createdAt
         firstMoment.note = "Updated note"
-        firstMoment.location = "Osaka, Japan"
         firstMoment.updatedAt = secondMomentCreatedAt
         album.ratio = .nineBySixteen
         album.remindValue = 2
@@ -247,7 +242,6 @@ struct OnceyTests {
         let moment = Moment(
             album: album,
             photo: photoPath,
-            location: "Seoul, South Korea",
             note: "Only moment",
             createdAt: createdAt,
             updatedAt: createdAt

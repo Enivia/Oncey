@@ -13,10 +13,6 @@ struct MomentCard1: View {
         }
     }
 
-    private var locationText: String? {
-        moment.location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-    }
-
     private var noteText: String? {
         moment.note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
@@ -36,18 +32,6 @@ struct MomentCard1: View {
                     .font(metrics.noteFont)
                     .lineLimit(renderMode == .thumbnail ? 2 : nil)
                     .fixedSize(horizontal: false, vertical: renderMode == .full)
-            }
-
-            if let locationText {
-                Label {
-                    Text(locationText)
-                        .lineLimit(renderMode == .thumbnail ? 1 : nil)
-                        .truncationMode(.tail)
-                } icon: {
-                    Image(systemName: "location.fill").foregroundStyle(AppTheme.Colors.accent).font(.system(size: 14))
-                }
-                .font(metrics.locationFont)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
             }
 
             Text(createdAtText)
@@ -71,14 +55,12 @@ struct MomentCard1: View {
 
 private struct StyledCard1Metrics {
     let sectionSpacing: CGFloat
-    let locationFont: Font
     let dateFont: Font
     let noteFont: Font
     let padding: CGFloat
 
     static let full = StyledCard1Metrics(
         sectionSpacing: AppTheme.Spacing.s3,
-        locationFont: .subheadline.weight(.semibold),
         dateFont: .subheadline,
         noteFont: .body,
         padding: AppTheme.Spacing.s6
@@ -86,7 +68,6 @@ private struct StyledCard1Metrics {
 
     static let thumbnail = StyledCard1Metrics(
         sectionSpacing: AppTheme.Spacing.s1,
-        locationFont: .caption.weight(.semibold),
         dateFont: .caption2,
         noteFont: .caption,
         padding: AppTheme.Spacing.s2
@@ -104,7 +85,6 @@ private extension String {
     let moment = Moment(
         album: album,
         photo: "",
-        location: "Fushimi Inari, Kyoto",
         note: "Thousands of torii gates leading up the mountain — peaceful at sunrise.",
         createdAt: Date(timeIntervalSince1970: 1_714_233_600)
     )
@@ -120,7 +100,6 @@ private extension String {
     let moment = Moment(
         album: album,
         photo: "",
-        location: "Arashiyama, Kyoto",
         note: "Bamboo grove at dawn.",
         createdAt: Date(timeIntervalSince1970: 1_714_320_000)
     )

@@ -228,14 +228,14 @@ private struct TimelinePendingShareInput: Identifiable {
     let album = Album(name: "Tokyo Trip 2024")
     container.mainContext.insert(album)
 
-    let entries: [(TimeInterval, String, String)] = [
-        (1_713_715_200, "Shinjuku, Tokyo", "Neon signs everywhere — the city never sleeps."),
-        (1_713_628_800, "Shibuya, Tokyo", "Golden hour at the famous crossing."),
-        (1_713_542_400, "Harajuku, Tokyo", "Colourful street fashion and crepe shops.")
+    let entries: [(TimeInterval, String)] = [
+        (1_713_715_200, "Neon signs everywhere — the city never sleeps."),
+        (1_713_628_800, "Golden hour at the famous crossing."),
+        (1_713_542_400, "Colourful street fashion and crepe shops.")
     ]
-    for (ts, loc, note) in entries {
+    for (ts, note) in entries {
         container.mainContext.insert(Moment(
-            album: album, photo: "", location: loc, note: note,
+            album: album, photo: "", note: note,
             createdAt: Date(timeIntervalSince1970: ts)
         ))
     }

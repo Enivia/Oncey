@@ -110,7 +110,6 @@ struct AlbumsViewModelTests {
             _ = Moment(
                 album: album,
                 photo: "/tmp/\(UUID().uuidString).jpg",
-                location: "Tokyo",
                 createdAt: date,
                 updatedAt: date
             )

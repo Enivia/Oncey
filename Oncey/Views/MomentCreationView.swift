@@ -167,12 +167,6 @@ enum MomentCreationCaptureInteractivityResolver {
     }
 }
 
-enum MomentCreationLocationRefreshPolicy {
-    static func shouldRefreshLocation(for step: MomentCreationWorkflowStep, hasAutoRequestedLocation: Bool) -> Bool {
-        step == .note && !hasAutoRequestedLocation
-    }
-}
-
 private enum ReminderDecision {
     case untouched
     case skip
@@ -257,8 +251,6 @@ struct MomentCreationView: View {
     @State private var reminderUnit: AlbumReminderUnit
     @State private var reminderDecision: ReminderDecision = .untouched
     @State private var reminderAuthorizationGranted: Bool?
-    @State private var locationService = CurrentLocationService()
-    @State private var hasAutoRequestedLocation = false
     @State private var isSaving = false
     @State private var createdAlbum: Album?
     @State private var createdMoment: Moment?
@@ -804,7 +796,6 @@ struct MomentCreationView: View {
         updateCameraLifecycle(for: step)
 
         if case .workflow(let workflowStep) = step {
-            requestLocationIfNeeded(for: workflowStep)
             scheduleFocus(for: workflowStep)
         } else {
             focusedField = nil
@@ -1080,7 +1071,6 @@ struct MomentCreationView: View {
             let moment = Moment(
                 album: album,
                 photo: photoPath,
-                location: locationService.persistedValue,
                 note: note,
                 createdAt: now,
                 updatedAt: now
@@ -1288,18 +1278,6 @@ struct MomentCreationView: View {
         }
     }
 
-    private func requestLocationIfNeeded(for step: MomentCreationWorkflowStep) {
-        guard MomentCreationLocationRefreshPolicy.shouldRefreshLocation(
-            for: step,
-            hasAutoRequestedLocation: hasAutoRequestedLocation
-        ) else {
-            return
-        }
-
-        hasAutoRequestedLocation = true
-        locationService.refresh()
-    }
-
     private func triggerCaptureFlash() {
         withAnimation(.easeOut(duration: 0.06)) {
             isCaptureFlashVisible = true
@@ -1391,7 +1369,6 @@ private enum MomentCreationPreviewSupport {
         container.mainContext.insert(Moment(
             album: album,
             photo: "",
-            location: "West Lake, Hangzhou",
             note: "Soft light, still water, and a quiet walk.",
             createdAt: Date(timeIntervalSince1970: 1_713_628_800),
             updatedAt: Date(timeIntervalSince1970: 1_713_628_800)

@@ -140,7 +140,6 @@ struct MomentShareView: View {
     let moment = Moment(
         album: album,
         photo: "",
-        location: "Shibuya, Tokyo",
         note: "Golden hour at the famous crossing — the city alive with evening rush.",
         createdAt: Date(timeIntervalSince1970: 1_713_628_800)
     )

@@ -71,7 +71,6 @@ private struct MomentCreationCompleteStepPreview: View {
         return Moment(
             album: album,
             photo: "",
-            location: "West Lake, Hangzhou",
             note: "Soft light, still water, and a quiet walk.",
             createdAt: Date(timeIntervalSince1970: 1_713_628_800)
         )

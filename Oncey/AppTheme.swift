@@ -62,7 +62,6 @@ enum AppTheme {
     }
 
     enum Layout {
-        static let albumCardWidthRatio: CGFloat = 0.6
         static let timelinePhotoMaxWidthRatio: CGFloat = 0.7
 
         static var screenWidth: CGFloat {

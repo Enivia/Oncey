@@ -120,10 +120,4 @@ struct MomentCreationCaptureChromeTests {
         #expect(fixedChrome.showsConfirmButton)
         #expect(!fixedChrome.showsMaskSlider)
     }
-
-    @Test func locationRefreshPolicyOnlyRequestsOnceWhenEnteringNote() {
-        #expect(MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .note, hasAutoRequestedLocation: false))
-        #expect(!MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .reminder, hasAutoRequestedLocation: false))
-        #expect(!MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .note, hasAutoRequestedLocation: true))
-    }
 }

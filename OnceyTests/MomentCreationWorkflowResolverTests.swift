@@ -95,7 +95,7 @@ struct MomentCreationWorkflowResolverTests {
 
     private func makeAlbumWithMoment() -> Album {
         let album = Album(name: "Existing Album")
-        _ = Moment(album: album, photo: "/tmp/existing.jpg", location: "Tokyo", note: "Existing note")
+        _ = Moment(album: album, photo: "/tmp/existing.jpg", note: "Existing note")
         return album
     }
 }

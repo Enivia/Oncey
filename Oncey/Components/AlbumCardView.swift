@@ -250,8 +250,8 @@ private struct CardLayerTransform {
 #Preview {
     let album: Album = {
         let album = Album(name: "Weekend Escape")
-        let _ = Moment(album: album, photo: "", location: "Kyoto", createdAt: .now.addingTimeInterval(-86_400 * 12))
-        let _ = Moment(album: album, photo: "", location: "Osaka", createdAt: .now.addingTimeInterval(-86_400 * 2))
+        let _ = Moment(album: album, photo: "", createdAt: .now.addingTimeInterval(-86_400 * 12))
+        let _ = Moment(album: album, photo: "", createdAt: .now.addingTimeInterval(-86_400 * 2))
         album.remindValue = 1
         album.remindUnit = .week
         album.remindAt = .now.addingTimeInterval(86_400 * 4)

@@ -23,7 +23,6 @@ struct MomentEditorView: View {
 
     @State private var note: String
     @State private var draftImage: UIImage?
-    @State private var locationService: CurrentLocationService
     @State private var hasImageChanges: Bool
     @State private var isCameraPresented = false
     @State private var pendingExtractInput: PendingExtractInput?
@@ -39,7 +38,6 @@ struct MomentEditorView: View {
         case .editMoment(let moment):
             _note = State(initialValue: moment.note)
             _draftImage = State(initialValue: ImageResourceService.platformImage(from: moment.photo))
-            _locationService = State(initialValue: CurrentLocationService(initialLocation: moment.location))
             _hasImageChanges = State(initialValue: false)
         }
     }
@@ -51,7 +49,6 @@ struct MomentEditorView: View {
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.s6) {
                     photoSection
-                    locationSection
                     noteSection
                 }
                 .padding(.horizontal, AppTheme.Spacing.s6)
@@ -138,41 +135,6 @@ struct MomentEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var locationSection: some View {
-        HStack() {
-            Label {
-                Text(locationService.displayText)
-                    .font(.body.weight(.medium))
-            } icon: {
-                Image(systemName: locationService.persistedValue.isEmpty ? "location" : "location.fill")
-                    .foregroundStyle(AppTheme.Colors.accent)
-            }
-
-            Spacer(minLength: AppTheme.Spacing.s2)
-
-            Button {
-                locationService.refresh()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 16))
-            }
-            .frame(width: 36, height: 36)
-            .background(AppTheme.Colors.accentSoft.opacity(0.8))
-            .clipShape(Circle())
-            .accessibilityLabel("Refresh location")
-        }
-        .padding(.horizontal, AppTheme.Spacing.s4)
-        .padding(.vertical, AppTheme.Spacing.s2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                .stroke(AppTheme.Colors.border, lineWidth: 1)
-        }
-        
-    }
-
     private var noteSection: some View {
         ZStack(alignment: .topLeading) {
             NoteEditorBackground()
@@ -252,7 +214,6 @@ struct MomentEditorView: View {
                     moment.photo = try AppImageStore.replaceImage(at: moment.photo, with: draftImage)
                 }
 
-                moment.location = locationService.persistedValue
                 moment.note = note
                 moment.updatedAt = now
 
@@ -331,7 +292,6 @@ private struct PendingExtractInput: Identifiable {
     let moment = Moment(
         album: album,
         photo: "",
-        location: "Shibuya, Tokyo",
         note: "Golden hour at the famous crossing — the city alive with evening rush.",
         createdAt: Date(timeIntervalSince1970: 1_713_628_800)
     )

@@ -179,14 +179,12 @@ private struct AlbumReminderEntryView: View {
     container.mainContext.insert(Moment(
         album: album1,
         photo: "",
-        location: "Shibuya, Tokyo",
         note: "Golden hour at the famous crossing.",
         createdAt: now.addingTimeInterval(-86_400 * 10)
     ))
     container.mainContext.insert(Moment(
         album: album1,
         photo: "",
-        location: "Shinjuku, Tokyo",
         note: "Neon signs and night-market energy.",
         createdAt: now.addingTimeInterval(-86_400 * 2)
     ))
@@ -203,7 +201,6 @@ private struct AlbumReminderEntryView: View {
     container.mainContext.insert(Moment(
         album: album2,
         photo: "",
-        location: "Lake District, UK",
         note: "Misty morning hike along the shore.",
         createdAt: now.addingTimeInterval(-86_400)
     ))

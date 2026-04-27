@@ -52,6 +52,12 @@ struct MomentTimelineRowView: View {
                     .padding(.top, 12)
 
                 photoContent
+                
+                if !moment.note.isEmpty {
+                    Text(moment.note)
+                        .font(.subheadline.italic())
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
             }.padding(.bottom, bottomSpacing)
         }
     }
@@ -161,7 +167,7 @@ private struct TimelineRailView: View {
 
 #Preview {
     let album = Album(name: "Timeline Preview")
-    let moment = Moment(album: album, photo: "", location: "Berlin, Germany")
+    let moment = Moment(album: album, photo: "", note: "Today is such a good day!")
 
     MomentTimelineRowView(
         moment: moment,
