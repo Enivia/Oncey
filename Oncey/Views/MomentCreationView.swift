@@ -168,7 +168,7 @@ enum MomentCreationCaptureInteractivityResolver {
 }
 
 enum MomentCreationLocationRefreshPolicy {
-    static func shouldRefreshLocation(for step: MomentCreationStep, hasAutoRequestedLocation: Bool) -> Bool {
+    static func shouldRefreshLocation(for step: MomentCreationWorkflowStep, hasAutoRequestedLocation: Bool) -> Bool {
         step == .note && !hasAutoRequestedLocation
     }
 }
@@ -205,6 +205,19 @@ private enum MomentCreationPreviewCropMode {
     case fixed(CameraCaptureAspect)
 }
 
+private struct MomentCreationPendingShareInput: Identifiable, Hashable {
+    let id = UUID()
+    let moment: Moment
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 private struct MomentCreationCaptureLayout: Equatable {
     let stageSize: CGSize
     let referenceRect: CGRect
@@ -216,14 +229,15 @@ private struct MomentCreationCaptureLayout: Equatable {
 struct MomentCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @FocusState private var isAlbumNameFocused: Bool
+    @FocusState private var focusedField: MomentCreationFocusField?
+    @Namespace private var creationAnimation
     @StateObject private var camera = CameraSessionController()
 
     let mode: MomentCreationMode
     let onComplete: (Album) -> Void
     let reminderClient: AlbumReminderClient
 
-    @State private var currentStep: MomentCreationStep = .capture
+    @State private var currentStep: MomentCreationScreenStep = .capture
     @State private var albumName: String
     @State private var note = ""
     @State private var selectedAspect: CameraCaptureAspect
@@ -243,12 +257,12 @@ struct MomentCreationView: View {
     @State private var reminderUnit: AlbumReminderUnit
     @State private var reminderDecision: ReminderDecision = .untouched
     @State private var reminderAuthorizationGranted: Bool?
-    @State private var isRequestingReminderAuthorization = false
     @State private var locationService = CurrentLocationService()
     @State private var hasAutoRequestedLocation = false
     @State private var isSaving = false
     @State private var createdAlbum: Album?
     @State private var createdMoment: Moment?
+    @State private var pendingShareInput: MomentCreationPendingShareInput?
     @State private var previousMoment: Moment?
     @State private var reminderScheduleOutcome: AlbumReminderScheduleOutcome?
     @State private var errorMessage: String?
@@ -271,60 +285,11 @@ struct MomentCreationView: View {
     }
 
     var body: some View {
-        ZStack {
-            backgroundView
+        alertConfiguredContent
+    }
 
-            VStack(spacing: AppTheme.Spacing.s6) {
-                if currentStep != .capture {
-                    progressBar
-                        .padding(.horizontal, AppTheme.Spacing.s6)
-                        .padding(.top, AppTheme.Spacing.s2)
-                }
-
-                stepContent
-            }
-            .padding(.bottom, currentStep == .capture ? 0 : AppTheme.Spacing.s6)
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden()
-        .toolbar { toolbarContent }
-        .toolbarBackground(currentStep == .capture ? .hidden : .visible, for: .navigationBar)
-        .toolbarColorScheme(currentStep == .capture ? .dark : .light, for: .navigationBar)
-        .onAppear {
-            updateCameraLifecycle(for: currentStep)
-        }
-        .onDisappear {
-            camera.deactivate()
-        }
-        .onChange(of: currentStep) { _, newValue in
-            updateCameraLifecycle(for: newValue)
-        }
-        .onChange(of: selectedPhotoItem) { _, newValue in
-            guard let newValue else {
-                return
-            }
-
-            Task {
-                await loadSelectedImage(from: newValue)
-            }
-        }
-        .onChange(of: isShowingCapturePreview) { _, _ in
-            updateCameraLifecycle(for: currentStep)
-        }
-        .onChange(of: selectedAspect) { _, _ in
-            preparedImage = nil
-
-            if isShowingInteractiveCaptureCrop {
-                resetCaptureCropTransform()
-            }
-        }
-        .onChange(of: camera.errorMessage) { _, newValue in
-            guard let newValue else {
-                return
-            }
-
-            present(newValue)
-        }
+    private var alertConfiguredContent: some View {
+        lifecycleConfiguredContent
         .alert("Something went wrong", isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -332,46 +297,178 @@ struct MomentCreationView: View {
         }
     }
 
-    private var backgroundView: some View {
-        Group {
-            if currentStep == .capture {
-                Color.black.ignoresSafeArea()
-            } else {
-                AppPageBackground()
+    private var lifecycleConfiguredContent: some View {
+        navigationConfiguredContent
+            .onAppear {
+                handleCurrentStepChange(currentStep)
             }
+            .onDisappear {
+                camera.deactivate()
+            }
+            .onChange(of: currentStep) { _, newValue in
+                handleCurrentStepChange(newValue)
+            }
+            .onChange(of: selectedPhotoItem) { _, newValue in
+                guard let newValue else {
+                    return
+                }
+
+                Task {
+                    await loadSelectedImage(from: newValue)
+                }
+            }
+            .onChange(of: isShowingCapturePreview) { _, _ in
+                updateCameraLifecycle(for: currentStep)
+            }
+            .onChange(of: selectedAspect) { _, _ in
+                preparedImage = nil
+
+                if isShowingInteractiveCaptureCrop {
+                    resetCaptureCropTransform()
+                }
+            }
+            .onChange(of: camera.errorMessage) { _, newValue in
+                guard let newValue else {
+                    return
+                }
+
+                present(newValue)
+            }
+    }
+
+    private var navigationConfiguredContent: some View {
+        contentRoot
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden()
+            .toolbar { toolbarContent }
+            .toolbarBackground(isCaptureStep ? .hidden : .visible, for: .navigationBar)
+            .toolbarColorScheme(isCaptureStep ? .dark : .light, for: .navigationBar)
+            .navigationDestination(item: $pendingShareInput) { input in
+                MomentShareView(moment: input.moment)
+            }
+    }
+
+    private var contentRoot: some View {
+        ZStack {
+            backgroundView
+            contentStack
         }
     }
 
-    @ViewBuilder
-    private var stepContent: some View {
-        ZStack {
-            if currentStep == .capture {
-                captureStep
-                    .transition(stepTransition)
-            }
-
-            if currentStep == .configuration {
-                configurationStep
-                    .transition(stepTransition)
-            }
-
-            if currentStep == .note {
-                noteStep
-                    .transition(stepTransition)
-            }
-
-            if currentStep == .success {
-                successStep
-                    .transition(stepTransition)
-            }
+    private var contentStack: some View {
+        VStack(spacing: AppTheme.Spacing.s6) {
+            workflowProgressSection
+            stepContent
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
+        .padding(.bottom, isCaptureStep ? 0 : AppTheme.Spacing.s6)
+    }
+
+    @ViewBuilder
+    private var workflowProgressSection: some View {
+        if currentWorkflowStep != nil {
+            progressBar
+                .padding(.horizontal, AppTheme.Spacing.s6)
+                .padding(.top, AppTheme.Spacing.s2)
+        }
+    }
+
+    private var backgroundView: AnyView {
+        if isCaptureStep {
+            return AnyView(Color.black.ignoresSafeArea())
+        }
+
+        return AnyView(AppPageBackground())
+    }
+
+    private var stepContent: AnyView {
+        let content: AnyView
+
+        switch currentStep {
+        case .capture:
+            content = AnyView(captureStep.transition(stepTransition))
+        case .workflow(let currentWorkflowStep):
+            content = workflowStepContent(currentWorkflowStep)
+        }
+
+        return AnyView(
+            ZStack {
+                content
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+        )
+    }
+
+    private func workflowStepContent(_ step: MomentCreationWorkflowStep) -> AnyView {
+        guard let workflowImage else {
+            return AnyView(ProgressView())
+        }
+
+        switch step {
+        case .albumName:
+            return AnyView(
+                AlbumNameStepView(
+                    image: workflowImage,
+                    namespace: creationAnimation,
+                    focus: $focusedField,
+                    albumName: $albumName,
+                    onNext: advanceFromAlbumName
+                )
+            )
+        case .note:
+            return AnyView(
+                NoteStepView(
+                    image: workflowImage,
+                    namespace: creationAnimation,
+                    focus: $focusedField,
+                    note: $note,
+                    onNext: {
+                        Task {
+                            await advanceFromNote()
+                        }
+                    }
+                )
+            )
+        case .reminder:
+            return AnyView(
+                ReminderStepView(
+                    image: workflowImage,
+                    note: note,
+                    namespace: creationAnimation,
+                    reminderValue: $reminderValue,
+                    reminderUnit: $reminderUnit,
+                    reminderDateText: configurationReminderText,
+                    onSkip: {
+                        Task {
+                            await completeCreation(using: .skip)
+                        }
+                    },
+                    onDeal: {
+                        Task {
+                            await completeCreation(using: .set)
+                        }
+                    }
+                )
+            )
+        case .complete:
+            guard let createdMoment else {
+                return AnyView(ProgressView())
+            }
+
+            return AnyView(
+                CompleteStepView(
+                    moment: createdMoment,
+                    reminderMessage: completionReminderMessage,
+                    namespace: creationAnimation,
+                    onTimeline: closeAndRouteToTimeline
+                )
+            )
+        }
     }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if currentStep == .capture {
+        if isCaptureStep {
             ToolbarItem(placement: .topBarLeading) {
                 if captureChrome.leadingAction == .backToCapture {
                     Button {
@@ -424,31 +521,47 @@ struct MomentCreationView: View {
                     .accessibilityLabel("Next")
                 }
             }
-        } else {
+        } else if let currentWorkflowStep, let workflowChrome {
             ToolbarItem(placement: .topBarLeading) {
-                switch currentStep {
-                case .configuration, .note:
-                    Button("Back", systemImage: "chevron.backward") {
+                switch workflowChrome.leadingAction {
+                case .back:
+                    Button {
                         stepBack()
+                    } label: {
+                        Image(systemName: "chevron.left")
                     }
-                case .success:
-                    Button("Done", systemImage: "checkmark") {
-                        closeAndRouteToTimeline()
+                    .accessibilityLabel("Back")
+                case .close:
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
-                case .capture:
-                    EmptyView()
+                    .accessibilityLabel(currentWorkflowStep == .complete ? "Close" : "Cancel")
+                }
+            }
+
+            if workflowChrome.showsShare, createdMoment != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        guard let createdMoment else {
+                            return
+                        }
+
+                        pendingShareInput = MomentCreationPendingShareInput(moment: createdMoment)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share")
                 }
             }
         }
     }
 
     private var progressBar: some View {
-        HStack(spacing: AppTheme.Spacing.s2) {
-            ForEach(Array(displayedSteps.enumerated()), id: \.offset) { index, step in
-                Capsule()
-                    .fill(index <= currentStepIndex ? progressTint(for: step) : progressTrackColor)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 6)
+        Group {
+            if let currentWorkflowStep {
+                ProgressDots(steps: workflowSteps, currentStep: currentWorkflowStep)
             }
         }
     }
@@ -549,7 +662,7 @@ struct MomentCreationView: View {
         layout: MomentCreationCaptureLayout
     ) -> some View {
         if isShowingInteractiveCaptureCrop {
-            MomentCreationCropCanvas(
+            CropCanvas(
                 image: captureDraft.image,
                 containerSize: layout.frameRect.size,
                 previewSize: layout.previewSize,
@@ -559,6 +672,7 @@ struct MomentCreationView: View {
                 offset: $captureCropOffset,
                 committedOffset: $committedCaptureCropOffset
             )
+            .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
         } else {
             Image(uiImage: captureDraft.image)
                 .resizable()
@@ -566,6 +680,7 @@ struct MomentCreationView: View {
                 .frame(width: layout.frameRect.width, height: layout.frameRect.height)
                 .clipped()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
         }
     }
 
@@ -631,345 +746,95 @@ struct MomentCreationView: View {
         }
     }
 
-    private var configurationStep: some View {
-        fixedFooterStep {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
-                if mode.showsAlbumNameField {
-                    TextField("Album Name", text: $albumName)
-                        .textInputAutocapitalization(.words)
-                        .submitLabel(.done)
-                        .focused($isAlbumNameFocused)
-                        .padding(.horizontal, AppTheme.Spacing.s4)
-                        .frame(height: 52)
-                        .background(AppTheme.Colors.accentSoft.opacity(0.35), in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
-                }
-
-                Text("How often would you like to leave a memory here?")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                HStack(spacing: AppTheme.Spacing.s3) {
-                    Picker("Value", selection: $reminderValue) {
-                        ForEach(1...30, id: \.self) { value in
-                            Text("\(value)").tag(value)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-
-                    Picker("Unit", selection: $reminderUnit) {
-                        ForEach(AlbumReminderUnit.allCases) { unit in
-                            Text(unit.title).tag(unit)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                }
-                .frame(height: 160)
-
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                    Text("We’re set. I’ll remind you to come back on \(configurationReminderText).")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                    if let preparedImage {
-                        reminderPreviewSummary(image: preparedImage)
-                    }
-                }
-            }
-        } footer: {
-            HStack(spacing: AppTheme.Spacing.s3) {
-                Button {
-                    if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        isAlbumNameFocused = true
-                        return
-                    }
-
-                    reminderDecision = .skip
-                    reminderAuthorizationGranted = nil
-                    navigate(to: .note, direction: .forward)
-                } label: {
-                    Text("Skip reminder")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(AppTheme.Colors.accent)
-
-                Button {
-                    Task {
-                        await handleSetReminderTapped()
-                    }
-                } label: {
-                    if isRequestingReminderAuthorization {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text("Set a reminder")
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.Colors.accent)
-                .disabled(isRequestingReminderAuthorization)
-            }
+    private var isCaptureStep: Bool {
+        if case .capture = currentStep {
+            return true
         }
+
+        return false
     }
 
-    private func reminderPreviewSummary(image: UIImage) -> some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.s3) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
-
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s1) {
-                Text("• \(AppDateFormatters.momentTimestamp.string(from: Date.now))")
-                Text("• See you then")
-            }
-            .font(.subheadline)
-            .foregroundStyle(AppTheme.Colors.textSecondary)
+    private var currentWorkflowStep: MomentCreationWorkflowStep? {
+        if case .workflow(let step) = currentStep {
+            return step
         }
+
+        return nil
     }
 
-    private var noteStep: some View {
-        fixedFooterStep {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s5) {
-                Text("What do you want to say?")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                notePromptView
-
-                noteEditor
-            }
-        } footer: {
-            Button {
-                Task {
-                    await completeCreation()
-                }
-            } label: {
-                if isSaving {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Complete")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.Colors.accent)
-            .disabled(isSaving)
-        }
+    private var workflowSteps: [MomentCreationWorkflowStep] {
+        MomentCreationWorkflowResolver.steps(for: mode)
     }
 
-    @ViewBuilder
-    private var notePromptView: some View {
-        if let latestMoment,
-           latestMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                Text(AppDateFormatters.momentTimestamp.string(from: latestMoment.createdAt))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
+    private var workflowChrome: MomentCreationWorkflowChromeState? {
+        currentWorkflowStep.map { MomentCreationWorkflowChromeResolver.resolve(for: $0) }
+    }
 
-                Text("\"\(latestMoment.note)\"")
-                    .font(.body)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-            }
-            .padding(AppTheme.Spacing.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+    private var workflowImage: UIImage? {
+        preparedImage ?? captureDraft?.image
+    }
+
+    private var completionReminderMessage: String? {
+        guard let createdAlbum, let remindAt = createdAlbum.remindAt else {
+            return nil
+        }
+
+        return "Deal. I’ll remind you to come back on \(AppDateFormatters.momentTimestamp.string(from: remindAt))"
+    }
+
+    private func advanceFromAlbumName() {
+        let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedAlbumName.isEmpty == false else {
+            focusedField = .albumName
+            return
+        }
+
+        navigate(to: .workflow(.note), direction: .forward)
+    }
+
+    private func advanceFromNote() async {
+        if mode.showsAlbumConfigurationStep {
+            navigate(to: .workflow(.reminder), direction: .forward)
         } else {
-            Text("Write a sentence for your future self who comes back here.")
-                .font(.body)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
+            await completeCreation()
         }
     }
 
-    private var noteEditor: some View {
-        ZStack(alignment: .topLeading) {
-            MomentCreationNoteEditorBackground()
+    private func handleCurrentStepChange(_ step: MomentCreationScreenStep) {
+        updateCameraLifecycle(for: step)
 
-            TextEditor(text: $note)
-                .frame(height: 180)
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, AppTheme.Spacing.s4)
-                .padding(.vertical, AppTheme.Spacing.s2)
-                .background(Color.clear)
-
-            if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("A single sentence for your future self...")
-                    .font(.body)
-                    .foregroundStyle(AppTheme.Colors.textSecondary.opacity(0.7))
-                    .padding(.horizontal, AppTheme.Spacing.s5)
-                    .padding(.vertical, AppTheme.Spacing.s5)
-                    .allowsHitTesting(false)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                .stroke(AppTheme.Colors.border, lineWidth: 1)
+        if case .workflow(let workflowStep) = step {
+            requestLocationIfNeeded(for: workflowStep)
+            scheduleFocus(for: workflowStep)
+        } else {
+            focusedField = nil
         }
     }
 
-    private var successStep: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.s6) {
-                if let previousMoment, let createdMoment {
-                    comparisonSuccessView(previousMoment: previousMoment, createdMoment: createdMoment)
-                } else {
-                    firstMomentSuccessView
-                }
+    private func scheduleFocus(for workflowStep: MomentCreationWorkflowStep) {
+        focusedField = nil
 
-                Button {
-                    closeAndRouteToTimeline()
-                } label: {
-                    Text("Timeline")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.Colors.accent)
-            }
-            .padding(.horizontal, AppTheme.Spacing.s6)
-            .padding(.bottom, AppTheme.Spacing.s6)
+        let targetField: MomentCreationFocusField?
+        switch workflowStep {
+        case .albumName:
+            targetField = .albumName
+        case .note:
+            targetField = .note
+        case .reminder, .complete:
+            targetField = nil
         }
-    }
 
-    private func fixedFooterStep<Content: View, Footer: View>(
-        @ViewBuilder content: @escaping () -> Content,
-        @ViewBuilder footer: @escaping () -> Footer
-    ) -> some View {
-        GeometryReader { proxy in
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                        content()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, AppTheme.Spacing.s6)
-                    .padding(.top, AppTheme.Spacing.s2)
-                    .padding(.bottom, AppTheme.Spacing.s6)
-                }
+        guard let targetField else {
+            return
+        }
 
-                VStack(spacing: AppTheme.Spacing.s3) {
-                    footer()
-                }
-                .padding(.horizontal, AppTheme.Spacing.s6)
-                .padding(.top, AppTheme.Spacing.s4)
-                .padding(.bottom, max(proxy.safeAreaInsets.bottom, AppTheme.Spacing.s4))
-                .background(AppTheme.Colors.background)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(AppTheme.Colors.divider)
-                        .frame(height: 1)
-                }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+
+            if currentWorkflowStep == workflowStep {
+                focusedField = targetField
             }
         }
-    }
-
-    private var firstMomentSuccessView: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(AppTheme.Colors.accent)
-
-            Text(successTitle)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-
-            Text(successMessage)
-                .font(.body)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-
-            if let createdAlbum, let remindAt = createdAlbum.remindAt {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                    Text("Reminder")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Text(AppDateFormatters.momentTimestamp.string(from: remindAt))
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                    if reminderScheduleOutcome == .savedWithoutSystemAuthorization {
-                        Text("Reminder saved, but notifications are turned off in Settings.")
-                            .font(.footnote)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .padding(AppTheme.Spacing.s4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-            }
-        }
-    }
-
-    private func comparisonSuccessView(previousMoment: Moment, createdMoment: Moment) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.s3) {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                    Text(AppDateFormatters.momentTimestamp.string(from: previousMoment.createdAt))
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                    LocalPhotoView(path: previousMoment.photo)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                }
-
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
-                    Text(AppDateFormatters.momentTimestamp.string(from: createdMoment.createdAt))
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                    LocalPhotoView(path: createdMoment.photo)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                }
-            }
-
-            if createdMoment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                Text(createdMoment.note)
-                    .font(.body)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-            }
-
-            timelineSummaryView(count: createdMoment.album?.moments.count ?? 0)
-        }
-    }
-
-    private func timelineSummaryView(count: Int) -> some View {
-        HStack(spacing: AppTheme.Spacing.s2) {
-            ForEach(0..<max(count, 1), id: \.self) { index in
-                Circle()
-                    .fill(AppTheme.Colors.accent)
-                    .frame(width: 8, height: 8)
-
-                if index < max(count, 1) - 1 {
-                    Rectangle()
-                        .fill(AppTheme.Colors.accent.opacity(0.35))
-                        .frame(width: 20, height: 2)
-                }
-            }
-
-            Spacer(minLength: AppTheme.Spacing.s4)
-
-            Text("Moment \(count) has been captured")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-        }
-        .padding(AppTheme.Spacing.s4)
-        .background(AppTheme.Colors.background, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-    }
-
-    private func stepCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.s4, content: content)
-            .padding(AppTheme.Spacing.s6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl, style: .continuous))
-            .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
     }
 
     private var permissionStateView: some View {
@@ -1028,26 +893,6 @@ struct MomentCreationView: View {
         case .unknown:
             return "Waiting for camera permission."
         }
-    }
-
-    private var displayedSteps: [MomentCreationStep] {
-        if mode.showsAlbumConfigurationStep {
-            return [.capture, .configuration, .note, .success]
-        }
-
-        return [.capture, .note, .success]
-    }
-
-    private var currentStepIndex: Int {
-        displayedSteps.firstIndex(of: currentStep) ?? 0
-    }
-
-    private var progressTrackColor: Color {
-        currentStep == .capture ? .white.opacity(0.16) : AppTheme.Colors.border
-    }
-
-    private func progressTint(for step: MomentCreationStep) -> Color {
-        currentStep == .capture ? .white : AppTheme.Colors.accent
     }
 
     private var stepTransition: AnyTransition {
@@ -1157,27 +1002,7 @@ struct MomentCreationView: View {
         return AppDateFormatters.momentTimestamp.string(from: date)
     }
 
-    private var successTitle: String {
-        if mode.isCreatingAlbum {
-            return "Album created"
-        }
-
-        return "Moment captured"
-    }
-
-    private var successMessage: String {
-        if reminderScheduleOutcome == .savedWithoutSystemAuthorization {
-            return "Your moment is saved and the reminder is stored, but notifications are currently turned off."
-        }
-
-        if mode.isCreatingFirstMoment {
-            return "Your first moment is ready. Come back anytime to see how this place changes."
-        }
-
-        return "Everything is saved. Keep building the timeline one moment at a time."
-    }
-
-    private func updateCameraLifecycle(for step: MomentCreationStep) {
+    private func updateCameraLifecycle(for step: MomentCreationScreenStep) {
         if step == .capture, captureDraft == nil {
             camera.activate()
         } else {
@@ -1211,26 +1036,22 @@ struct MomentCreationView: View {
         }
 
         preparedImage = exportPreparedImage(using: layout)
-
-        if mode.showsAlbumConfigurationStep {
-            navigate(to: .configuration, direction: .forward)
-        } else {
-            navigate(to: .note, direction: .forward)
-        }
+        navigate(to: MomentCreationScreenStepResolver.stepAfterCapture(for: mode), direction: .forward)
     }
 
     private func stepBack() {
-        switch currentStep {
-        case .configuration:
-            navigate(to: .capture, direction: .backward)
-        case .note:
-            navigate(to: mode.showsAlbumConfigurationStep ? .configuration : .capture, direction: .backward)
-        case .capture, .success:
-            break
+        guard let previousStep = MomentCreationScreenStepResolver.previousStep(from: currentStep, in: mode) else {
+            return
         }
+
+        navigate(to: previousStep, direction: .backward)
     }
 
     private func completeCreation() async {
+        await completeCreation(using: reminderDecision)
+    }
+
+    private func completeCreation(using decision: ReminderDecision) async {
         guard !isSaving else {
             return
         }
@@ -1243,11 +1064,12 @@ struct MomentCreationView: View {
         if mode.showsAlbumNameField {
             let trimmedAlbumName = albumName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedAlbumName.isEmpty else {
-                isAlbumNameFocused = true
+                focusedField = .albumName
                 return
             }
         }
 
+        reminderDecision = decision
         isSaving = true
 
         do {
@@ -1280,7 +1102,7 @@ struct MomentCreationView: View {
             createdAlbum = album
             createdMoment = moment
             reminderScheduleOutcome = scheduleOutcome
-            navigate(to: .success, direction: .forward)
+            navigate(to: .workflow(.complete), direction: .forward)
         } catch {
             present(error.localizedDescription)
         }
@@ -1458,16 +1280,15 @@ struct MomentCreationView: View {
         committedCaptureCropZoomScale = 1
     }
 
-    private func navigate(to step: MomentCreationStep, direction: MomentCreationNavigationDirection) {
+    private func navigate(to step: MomentCreationScreenStep, direction: MomentCreationNavigationDirection) {
         navigationDirection = direction
-        requestLocationIfNeeded(for: step)
 
         withAnimation(.easeInOut(duration: 0.28)) {
             currentStep = step
         }
     }
 
-    private func requestLocationIfNeeded(for step: MomentCreationStep) {
+    private func requestLocationIfNeeded(for step: MomentCreationWorkflowStep) {
         guard MomentCreationLocationRefreshPolicy.shouldRefreshLocation(
             for: step,
             hasAutoRequestedLocation: hasAutoRequestedLocation
@@ -1518,26 +1339,6 @@ struct MomentCreationView: View {
         }
     }
 
-    private func handleSetReminderTapped() async {
-        if mode.showsAlbumNameField, albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            isAlbumNameFocused = true
-            return
-        }
-
-        reminderDecision = .set
-        isRequestingReminderAuthorization = true
-
-        do {
-            reminderAuthorizationGranted = try await reminderClient.requestAuthorization()
-        } catch {
-            reminderAuthorizationGranted = false
-            present("Reminder access couldn't be confirmed. We'll still save the reminder, but iOS notifications may stay off.")
-        }
-
-        isRequestingReminderAuthorization = false
-        navigate(to: .note, direction: .forward)
-    }
-
     private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
         if let album = mode.album,
            let remindValue = album.remindValue,
@@ -1569,24 +1370,6 @@ struct MomentCreationView: View {
         }
 
         return .threeByFour
-    }
-}
-
-private struct MomentCreationNoteEditorBackground: View {
-    private let lineSpacing: CGFloat = 32
-    private let topInset: CGFloat = 36
-
-    var body: some View {
-        Canvas(rendersAsynchronously: true) { context, size in
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(AppTheme.Colors.surface))
-
-            for y in stride(from: topInset, through: size.height, by: lineSpacing) {
-                var line = Path()
-                line.move(to: CGPoint(x: AppTheme.Spacing.s4, y: y))
-                line.addLine(to: CGPoint(x: size.width - AppTheme.Spacing.s4, y: y))
-                context.stroke(line, with: .color(AppTheme.Colors.accentSoft.opacity(0.8)), lineWidth: 1)
-            }
-        }
     }
 }
 

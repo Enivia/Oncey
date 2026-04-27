@@ -2,7 +2,7 @@
 import SwiftUI
 import UIKit
 
-struct MomentCreationCropCanvas: View {
+struct CropCanvas: View {
     let image: UIImage
     let containerSize: CGSize
     let previewSize: CGSize

@@ -1,6 +1,7 @@
 import Testing
 @testable import Oncey
 
+@MainActor
 struct MomentCreationCaptureChromeTests {
 
     @Test func cameraCaptureStateLocksAspectUntilCaptureFinishes() {
@@ -122,7 +123,7 @@ struct MomentCreationCaptureChromeTests {
 
     @Test func locationRefreshPolicyOnlyRequestsOnceWhenEnteringNote() {
         #expect(MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .note, hasAutoRequestedLocation: false))
-        #expect(!MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .capture, hasAutoRequestedLocation: false))
+        #expect(!MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .reminder, hasAutoRequestedLocation: false))
         #expect(!MomentCreationLocationRefreshPolicy.shouldRefreshLocation(for: .note, hasAutoRequestedLocation: true))
     }
 }
