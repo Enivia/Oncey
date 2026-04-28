@@ -12,24 +12,15 @@ struct MomentsTimelineView: View {
     let album: Album
     @State private var isCreationPresented = false
     @State private var pendingShareInput: TimelinePendingShareInput?
-    @State private var isSelectionMode = false
-    @State private var selectedMomentIDs: Set<UUID> = []
     @State private var pendingSingleDeleteMoment: Moment?
-    @State private var isPresentingBulkDeleteConfirmation = false
+    @State private var settledIndex = 0
+    @State private var focusPosition: CGFloat = 0
     @State private var errorTitle = "Couldn't load photo"
     @State private var errorMessage: String?
     @State private var isPresentingError = false
 
     private var viewModel: MomentsTimelineViewModel {
         MomentsTimelineViewModel(album: album)
-    }
-
-    private var selectedCountTitle: String {
-        "\(selectedMomentIDs.count) selected"
-    }
-
-    private var selectedMoments: [Moment] {
-        viewModel.moments.filter { selectedMomentIDs.contains($0.id) }
     }
 
     var body: some View {
@@ -45,46 +36,56 @@ struct MomentsTimelineView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(viewModel.moments.enumerated()), id: \.element.id) { index, moment in
-                                timelineRow(for: moment, at: index)
-                            }
+                    GeometryReader { geometry in
+                        let albumAspectRatio = preferredAlbumAspectRatio
+                        let metrics = MomentTimelineStageMetrics.resolve(
+                            containerSize: geometry.size,
+                            albumAspectRatio: albumAspectRatio ?? 3 / 4
+                        )
+
+                        VStack {
+                            Spacer(minLength: 0)
+
+                            MomentTimelineStageView(
+                                moments: viewModel.moments,
+                                focusPosition: focusPosition,
+                                metrics: metrics,
+                                albumAspectRatio: albumAspectRatio,
+                                timestampTextProvider: { moment in
+                                    viewModel.timestampText(for: moment)
+                                },
+                                onShare: { moment in
+                                    pendingShareInput = TimelinePendingShareInput(moment: moment)
+                                },
+                                onDelete: { moment in
+                                    pendingSingleDeleteMoment = moment
+                                }
+                            )
+                            .frame(maxWidth: .infinity)
+                            .highPriorityGesture(
+                                dragGesture(
+                                    stepDistance: metrics.stepDistance,
+                                    momentCount: viewModel.moments.count
+                                )
+                            )
+
+                            Spacer(minLength: 0)
                         }
-                        .padding(.leading, AppTheme.Spacing.s5)
-                        .padding(.bottom, AppTheme.Spacing.s10)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                     }
                 }
             }
         }
-        .navigationTitle(isSelectionMode ? selectedCountTitle : viewModel.title)
+        .navigationTitle(viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                if isSelectionMode {
-                    Button("Close", systemImage: "xmark") {
-                        exitSelectionMode()
-                    }
-                }
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
-                if isSelectionMode {
-                    Button(role: .destructive) {
-                        isPresentingBulkDeleteConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .disabled(selectedMomentIDs.isEmpty)
-                    .accessibilityLabel("Delete selected moments")
-                } else {
-                    Button {
-                        isCreationPresented = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add moment")
+                Button {
+                    isCreationPresented = true
+                } label: {
+                    Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add moment")
             }
         }
         .fullScreenCover(isPresented: $isCreationPresented) {
@@ -113,57 +114,28 @@ struct MomentsTimelineView: View {
         } message: {
             Text("This action cannot be undone.")
         }
-        .alert("Delete selected moments?", isPresented: $isPresentingBulkDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                deleteMoments(selectedMoments)
-            }
-
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This action cannot be undone.")
-        }
         .alert(errorTitle, isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "Please try again.")
         }
-    }
+        .onChange(of: viewModel.moments.count) { oldCount, newCount in
+            guard newCount > 0 else {
+                settledIndex = 0
+                focusPosition = 0
+                return
+            }
 
-    @ViewBuilder
-    private func timelineRow(for moment: Moment, at index: Int) -> some View {
-        let row = MomentTimelineRowView(
-            moment: moment,
-            timestampText: viewModel.timestampText(for: moment),
-            isFirst: index == 0,
-            isLast: index == viewModel.moments.count - 1,
-            bottomSpacing: index == viewModel.moments.count - 1 ? 0 : AppTheme.Spacing.s6,
-            isSelectionMode: isSelectionMode,
-            isSelected: selectedMomentIDs.contains(moment.id),
-            onMultiSelect: {
-                enterSelectionMode(selecting: moment)
-            },
-            onShare: {
-                pendingShareInput = TimelinePendingShareInput(moment: moment)
-            },
-            onDelete: {
-                pendingSingleDeleteMoment = moment
+            if newCount > oldCount {
+                settledIndex = 0
+            } else {
+                settledIndex = min(settledIndex, newCount - 1)
             }
-        )
 
-        if isSelectionMode {
-            Button {
-                toggleSelection(for: moment)
-            } label: {
-                row
-            }
-            .buttonStyle(.plain)
-        } else {
-            NavigationLink {
-                MomentEditorView(mode: .editMoment(moment: moment))
-            } label: {
-                row
-            }
-            .buttonStyle(.plain)
+            focusPosition = CGFloat(settledIndex)
+        }
+        .onAppear {
+            focusPosition = CGFloat(settledIndex)
         }
     }
 
@@ -178,22 +150,55 @@ struct MomentsTimelineView: View {
         )
     }
 
-    private func enterSelectionMode(selecting moment: Moment) {
-        isSelectionMode = true
-        selectedMomentIDs = [moment.id]
-    }
-
-    private func exitSelectionMode() {
-        isSelectionMode = false
-        selectedMomentIDs.removeAll()
-    }
-
-    private func toggleSelection(for moment: Moment) {
-        if selectedMomentIDs.contains(moment.id) {
-            selectedMomentIDs.remove(moment.id)
-        } else {
-            selectedMomentIDs.insert(moment.id)
+    private var preferredAlbumAspectRatio: CGFloat? {
+        if let ratio = album.ratio?.aspectRatio {
+            return ratio
         }
+
+        guard let templatePhotoAspectRatio = album.templatePhotoAspectRatio else {
+            return nil
+        }
+
+        return CGFloat(templatePhotoAspectRatio)
+    }
+
+    private func activeFocusedPhotoSize(in moments: [Moment]) -> CGSize? {
+        guard !moments.isEmpty else {
+            return nil
+        }
+
+        let activeIndex = min(max(Int(focusPosition.rounded()), 0), moments.count - 1)
+        return ImageResourceService.imageSize(from: moments[activeIndex].photo)
+    }
+
+    private func dragGesture(stepDistance: CGFloat, momentCount: Int) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let dragState = MomentTimelineSceneResolver.dragState(
+                    translation: value.translation.height,
+                    predictedEndTranslation: value.predictedEndTranslation.height,
+                    stepDistance: stepDistance,
+                    momentCount: momentCount,
+                    currentSettledIndex: settledIndex
+                )
+
+                focusPosition = dragState.focusPosition
+            }
+            .onEnded { value in
+                let dragState = MomentTimelineSceneResolver.dragState(
+                    translation: value.translation.height,
+                    predictedEndTranslation: value.predictedEndTranslation.height,
+                    stepDistance: stepDistance,
+                    momentCount: momentCount,
+                    currentSettledIndex: settledIndex
+                )
+
+                settledIndex = dragState.targetIndex
+
+                withAnimation(.snappy(duration: 0.28, extraBounce: 0.08)) {
+                    focusPosition = CGFloat(dragState.targetIndex)
+                }
+            }
     }
 
     private func deleteMoments(_ moments: [Moment]) {
@@ -204,9 +209,13 @@ struct MomentsTimelineView: View {
         do {
             try MomentDeletionService.delete(moments, in: modelContext)
 
-            selectedMomentIDs.subtract(moments.map(\.id))
-            if isSelectionMode, selectedMomentIDs.isEmpty {
-                exitSelectionMode()
+            let remainingCount = viewModel.moments.count
+            if remainingCount == 0 {
+                settledIndex = 0
+                focusPosition = 0
+            } else {
+                settledIndex = min(settledIndex, remainingCount - 1)
+                focusPosition = CGFloat(settledIndex)
             }
         } catch {
             errorTitle = "Couldn't delete moment"
@@ -229,8 +238,8 @@ private struct TimelinePendingShareInput: Identifiable {
     container.mainContext.insert(album)
 
     let entries: [(TimeInterval, String)] = [
-        (1_713_715_200, "Neon signs everywhere — the city never sleeps."),
-        (1_713_628_800, "Golden hour at the famous crossing."),
+        (1_713_715_200, "Neon signs everywhere — the city never sleeps. Neon signs everywhere — the city never sleeps."),
+        (1_713_628_800, "Golden hour at the famous crossing. Golden hour at the famous crossing. Golden hour at the famous crossing."),
         (1_713_542_400, "Colourful street fashion and crepe shops.")
     ]
     for (ts, note) in entries {
