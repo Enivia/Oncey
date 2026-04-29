@@ -5,7 +5,10 @@ import UIKit
 struct NoteStepView: View {
     let image: UIImage
     let namespace: Namespace.ID
+    let usesHeroMatchedGeometry: Bool
     let focus: FocusState<MomentCreationFocusField?>.Binding
+    let elementPhases: MomentCreationTransitionElementPhases
+    let reduceMotion: Bool
     @Binding var note: String
     let onNext: () -> Void
 
@@ -14,13 +17,18 @@ struct NoteStepView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
                 HeroImageView(
                     image: image,
-                    maxHeightRatio: 0.33,
+                    maxHeight: 500,
                     namespace: namespace,
-                    geometryID: "creation-hero-image"
+                    geometryID: "creation-hero-image",
+                    usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
+                )
+                .momentCreationTransitionPhase(
+                    phase(for: .heroImage),
+                    reduceMotion: reduceMotion
                 )
 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
-                    ZStack(alignment: .topLeading) {
+                    let noteCard = ZStack(alignment: .topLeading) {
                         TextEditor(text: $note)
                             .frame(minHeight: 120)
                             .scrollContentBackground(.hidden)
@@ -38,11 +46,25 @@ struct NoteStepView: View {
                                 .allowsHitTesting(false)
                         }
                     }
-                    .matchedGeometryEffect(id: "creation-note-card", in: namespace)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
                             .stroke(AppTheme.Colors.border, lineWidth: 1)
+                    }
+
+                    if reduceMotion {
+                        noteCard
+                            .momentCreationTransitionPhase(
+                                phase(for: .noteCard),
+                                reduceMotion: reduceMotion
+                            )
+                    } else {
+                        noteCard
+                            .matchedGeometryEffect(id: "creation-note-card", in: namespace)
+                            .momentCreationTransitionPhase(
+                                phase(for: .noteCard),
+                                reduceMotion: reduceMotion
+                            )
                     }
 
                     Button(action: onNext){
@@ -51,12 +73,22 @@ struct NoteStepView: View {
                     .buttonBorderShape(.roundedRectangle(radius: AppTheme.CornerRadius.md))
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.Colors.accent)
+                    .momentCreationTransitionPhase(
+                        phase(for: .primaryButton),
+                        reduceMotion: reduceMotion
+                    )
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
             .padding(.top, AppTheme.Spacing.s2)
             .padding(.bottom, AppTheme.Spacing.s6)
         }
+    }
+
+    private func phase(
+        for element: MomentCreationTransitionElement
+    ) -> MomentCreationTransitionElementPhase {
+        elementPhases[element] ?? .hiddenBelow
     }
 }
 
@@ -69,7 +101,10 @@ private struct MomentCreationNoteStepPreview: View {
         NoteStepView(
             image: UIImage(systemName: "photo") ?? UIImage(),
             namespace: previewNamespace,
+            usesHeroMatchedGeometry: true,
             focus: $focusedField,
+            elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.note)),
+            reduceMotion: false,
             note: $note,
             onNext: {}
         )

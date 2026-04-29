@@ -3,44 +3,23 @@ import SwiftUI
 import UIKit
 
 struct ReminderStepView: View {
-    let image: UIImage
-    let note: String
-    let namespace: Namespace.ID
+    let elementPhases: MomentCreationTransitionElementPhases
+    let reduceMotion: Bool
     @Binding var reminderValue: Int
     @Binding var reminderUnit: AlbumReminderUnit
     let reminderDateText: String
     let onSkip: () -> Void
     let onDeal: () -> Void
 
-    private var trimmedNote: String {
-        note.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
-                    HeroImageView(
-                        image: image,
-                        maxHeightRatio: 0.33,
-                        namespace: namespace,
-                        geometryID: "creation-hero-image"
-                    )
-
-                    if trimmedNote.isEmpty == false {
-                        Text(trimmedNote)
-                            .font(.body)
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
-                            .lineLimit(2)
-                    }
-                }
-                .matchedGeometryEffect(id: "creation-note-card", in: namespace)
-                .padding(AppTheme.Spacing.s5)
-                .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
-
                 Text("How often would you like to leave a memory here?")
                     .font(.title3)
+                    .momentCreationTransitionPhase(
+                        phase(for: .reminderTitle),
+                        reduceMotion: reduceMotion
+                    )
 
                 HStack(spacing: AppTheme.Spacing.s3) {
                     Picker("Value", selection: $reminderValue) {
@@ -59,10 +38,18 @@ struct ReminderStepView: View {
                 }
                 .frame(height: 160)
                 .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+                .momentCreationTransitionPhase(
+                    phase(for: .reminderPicker),
+                    reduceMotion: reduceMotion
+                )
 
                 Text("I’ll remind you to come back on \(reminderDateText)")
                     .font(.caption)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .momentCreationTransitionPhase(
+                        phase(for: .reminderDescription),
+                        reduceMotion: reduceMotion
+                    )
 
                 VStack(spacing: AppTheme.Spacing.s5) {
                     Button(action: onDeal) {
@@ -71,6 +58,10 @@ struct ReminderStepView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.Colors.accent)
+                    .momentCreationTransitionPhase(
+                        phase(for: .reminderPrimaryButton),
+                        reduceMotion: reduceMotion
+                    )
                     
                     Button(action: onSkip) {
                         Label("No Reminder", systemImage: "bell.slash")
@@ -78,12 +69,22 @@ struct ReminderStepView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(AppTheme.Colors.accent)
+                    .momentCreationTransitionPhase(
+                        phase(for: .reminderSecondaryButton),
+                        reduceMotion: reduceMotion
+                    )
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
             .padding(.top, AppTheme.Spacing.s2)
             .padding(.bottom, AppTheme.Spacing.s6)
         }
+    }
+
+    private func phase(
+        for element: MomentCreationTransitionElement
+    ) -> MomentCreationTransitionElementPhase {
+        elementPhases[element] ?? .hiddenBelow
     }
 }
 
@@ -94,9 +95,8 @@ private struct MomentCreationReminderStepPreview: View {
 
     var body: some View {
         ReminderStepView(
-            image: UIImage(systemName: "photo") ?? UIImage(),
-            note: "Soft light, still water, and a quiet walk.",
-            namespace: previewNamespace,
+            elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.reminder)),
+            reduceMotion: false,
             reminderValue: $reminderValue,
             reminderUnit: $reminderUnit,
             reminderDateText: AppDateFormatters.momentTimestamp.string(from: Date.now.addingTimeInterval(60 * 60 * 24 * 90)),

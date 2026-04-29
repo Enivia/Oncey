@@ -12,6 +12,7 @@ enum MomentCreationMode {
         switch self {
         case .newAlbum:
             return nil
+
         case .newMoment(let album):
             return album
         }
@@ -223,6 +224,7 @@ private struct MomentCreationCaptureLayout: Equatable {
 struct MomentCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedField: MomentCreationFocusField?
     @Namespace private var creationAnimation
     @StateObject private var camera = CameraSessionController()
@@ -259,6 +261,14 @@ struct MomentCreationView: View {
     @State private var reminderScheduleOutcome: AlbumReminderScheduleOutcome?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
+    @State private var activeTransitionPlan: MomentCreationTransitionPlan?
+    @State private var transitionSourceStep: MomentCreationScreenStep?
+    @State private var transitionDestinationStep: MomentCreationScreenStep?
+    @State private var transitionElementPhases: [MomentCreationScreenStep: MomentCreationTransitionElementPhases] = [:]
+    @State private var transitionBackgroundOpacity = 0.0
+    @State private var transitionSourceOpacity = 1.0
+    @State private var transitionTask: Task<Void, Never>?
+    @State private var focusTask: Task<Void, Never>?
 
     init(
         mode: MomentCreationMode,
@@ -295,6 +305,8 @@ struct MomentCreationView: View {
                 handleCurrentStepChange(currentStep)
             }
             .onDisappear {
+                transitionTask?.cancel()
+                focusTask?.cancel()
                 camera.deactivate()
             }
             .onChange(of: currentStep) { _, newValue in
@@ -365,6 +377,15 @@ struct MomentCreationView: View {
     }
 
     private var backgroundView: AnyView {
+        if isCaptureEntryTransitionActive {
+            return AnyView(
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    AppPageBackground().opacity(transitionBackgroundOpacity)
+                }
+            )
+        }
+
         if isCaptureStep {
             return AnyView(Color.black.ignoresSafeArea())
         }
@@ -375,11 +396,12 @@ struct MomentCreationView: View {
     private var stepContent: AnyView {
         let content: AnyView
 
-        switch currentStep {
-        case .capture:
-            content = AnyView(captureStep.transition(stepTransition))
-        case .workflow(let currentWorkflowStep):
-            content = workflowStepContent(currentWorkflowStep)
+        if let sourceStep = transitionSourceStep,
+           let destinationStep = transitionDestinationStep,
+           activeTransitionPlan?.kind == .staged {
+            content = AnyView(stagedTransitionContent(from: sourceStep, to: destinationStep))
+        } else {
+            content = AnyView(singleStepContent(for: currentStep).transition(stepTransition))
         }
 
         return AnyView(
@@ -388,31 +410,47 @@ struct MomentCreationView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .allowsHitTesting(activeTransitionPlan == nil)
         )
     }
 
-    private func workflowStepContent(_ step: MomentCreationWorkflowStep) -> AnyView {
-        guard let workflowImage else {
-            return AnyView(ProgressView())
-        }
+    private func workflowStepContent(
+        _ step: MomentCreationWorkflowStep,
+        screenStep: MomentCreationScreenStep
+    ) -> AnyView {
+        let elementPhases = phases(for: screenStep)
 
         switch step {
         case .albumName:
+            guard let workflowImage else {
+                return AnyView(ProgressView())
+            }
+
             return AnyView(
                 AlbumNameStepView(
                     image: workflowImage,
                     namespace: creationAnimation,
+                    usesHeroMatchedGeometry: usesWorkflowHeroMatchedGeometry,
                     focus: $focusedField,
+                    elementPhases: elementPhases,
+                    reduceMotion: reduceMotion,
                     albumName: $albumName,
                     onNext: advanceFromAlbumName
                 )
             )
         case .note:
+            guard let workflowImage else {
+                return AnyView(ProgressView())
+            }
+
             return AnyView(
                 NoteStepView(
                     image: workflowImage,
                     namespace: creationAnimation,
+                    usesHeroMatchedGeometry: usesWorkflowHeroMatchedGeometry,
                     focus: $focusedField,
+                    elementPhases: elementPhases,
+                    reduceMotion: reduceMotion,
                     note: $note,
                     onNext: {
                         Task {
@@ -424,9 +462,8 @@ struct MomentCreationView: View {
         case .reminder:
             return AnyView(
                 ReminderStepView(
-                    image: workflowImage,
-                    note: note,
-                    namespace: creationAnimation,
+                    elementPhases: elementPhases,
+                    reduceMotion: reduceMotion,
                     reminderValue: $reminderValue,
                     reminderUnit: $reminderUnit,
                     reminderDateText: configurationReminderText,
@@ -452,9 +489,32 @@ struct MomentCreationView: View {
                     moment: createdMoment,
                     reminderMessage: completionReminderMessage,
                     namespace: creationAnimation,
+                    elementPhases: elementPhases,
+                    reduceMotion: reduceMotion,
                     onTimeline: closeAndRouteToTimeline
                 )
             )
+        }
+    }
+
+    private func singleStepContent(for step: MomentCreationScreenStep) -> AnyView {
+        switch step {
+        case .capture:
+            return AnyView(captureStep)
+        case .workflow(let workflowStep):
+            return workflowStepContent(workflowStep, screenStep: step)
+        }
+    }
+
+    private func stagedTransitionContent(
+        from sourceStep: MomentCreationScreenStep,
+        to destinationStep: MomentCreationScreenStep
+    ) -> some View {
+        ZStack {
+            singleStepContent(for: sourceStep)
+                .opacity(sourceOpacity(for: sourceStep))
+
+            singleStepContent(for: destinationStep)
         }
     }
 
@@ -579,7 +639,7 @@ struct MomentCreationView: View {
 
     private func captureStage(layout: MomentCreationCaptureLayout) -> some View {
         ZStack(alignment: .topLeading) {
-            Color.black
+            captureStageBackgroundColor
 
             captureFrameContent(layout: layout)
                 .frame(width: layout.frameRect.width, height: layout.frameRect.height)
@@ -606,7 +666,7 @@ struct MomentCreationView: View {
 
             if captureChrome.showsCaptureControls {
                 VStack(spacing: 0) {
-                    Spacer(minLength: 0)
+                     Spacer(minLength: 0)
 
                     captureBottomBar
                         .padding(.horizontal, AppTheme.Spacing.s5)
@@ -654,7 +714,7 @@ struct MomentCreationView: View {
         layout: MomentCreationCaptureLayout
     ) -> some View {
         if isShowingInteractiveCaptureCrop {
-            CropCanvas(
+            let canvas = CropCanvas(
                 image: captureDraft.image,
                 containerSize: layout.frameRect.size,
                 previewSize: layout.previewSize,
@@ -664,15 +724,31 @@ struct MomentCreationView: View {
                 offset: $captureCropOffset,
                 committedOffset: $committedCaptureCropOffset
             )
-            .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
+
+            if reduceMotion {
+                canvas
+            } else if captureHeroMatchedGeometryEnabled {
+                canvas
+                    .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
+            } else {
+                canvas
+            }
         } else {
-            Image(uiImage: captureDraft.image)
+            let image = Image(uiImage: captureDraft.image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: layout.frameRect.width, height: layout.frameRect.height)
                 .clipped()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
+
+            if reduceMotion {
+                image
+            } else if captureHeroMatchedGeometryEnabled {
+                image
+                    .matchedGeometryEffect(id: "creation-hero-image", in: creationAnimation)
+            } else {
+                image
+            }
         }
     }
 
@@ -762,8 +838,29 @@ struct MomentCreationView: View {
         currentWorkflowStep.map { MomentCreationWorkflowChromeResolver.resolve(for: $0) }
     }
 
+    private var isCaptureEntryTransitionActive: Bool {
+        transitionSourceStep == .capture && activeTransitionPlan?.kind == .staged
+    }
+
+    private var captureStageBackgroundColor: Color {
+        isCaptureEntryTransitionActive ? .clear : .black
+    }
+
     private var workflowImage: UIImage? {
         preparedImage ?? captureDraft?.image
+    }
+
+    private var captureHeroMatchedGeometryEnabled: Bool {
+        switch activeTransitionPlan?.route {
+        case .captureToAlbumName, .captureToNote:
+            return false
+        default:
+            return true
+        }
+    }
+
+    private var usesWorkflowHeroMatchedGeometry: Bool {
+        captureHeroMatchedGeometryEnabled
     }
 
     private var completionReminderMessage: String? {
@@ -795,6 +892,11 @@ struct MomentCreationView: View {
     private func handleCurrentStepChange(_ step: MomentCreationScreenStep) {
         updateCameraLifecycle(for: step)
 
+        if activeTransitionPlan?.kind == .staged {
+            focusedField = nil
+            return
+        }
+
         if case .workflow(let workflowStep) = step {
             scheduleFocus(for: workflowStep)
         } else {
@@ -804,25 +906,18 @@ struct MomentCreationView: View {
 
     private func scheduleFocus(for workflowStep: MomentCreationWorkflowStep) {
         focusedField = nil
+        focusTask?.cancel()
 
-        let targetField: MomentCreationFocusField?
-        switch workflowStep {
-        case .albumName:
-            targetField = .albumName
-        case .note:
-            targetField = .note
-        case .reminder, .complete:
-            targetField = nil
-        }
+        let targetField = TransitionStateResolver.focusField(for: .workflow(workflowStep))
 
         guard let targetField else {
             return
         }
 
-        Task { @MainActor in
+        focusTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(220))
 
-            if currentWorkflowStep == workflowStep {
+            if currentWorkflowStep == workflowStep, activeTransitionPlan == nil {
                 focusedField = targetField
             }
         }
@@ -887,6 +982,10 @@ struct MomentCreationView: View {
     }
 
     private var stepTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+
         let insertionEdge: Edge = navigationDirection == .forward ? .trailing : .leading
         let removalEdge: Edge = navigationDirection == .forward ? .leading : .trailing
 
@@ -1273,8 +1372,303 @@ struct MomentCreationView: View {
     private func navigate(to step: MomentCreationScreenStep, direction: MomentCreationNavigationDirection) {
         navigationDirection = direction
 
-        withAnimation(.easeInOut(duration: 0.28)) {
-            currentStep = step
+        transitionTask?.cancel()
+        focusTask?.cancel()
+
+        let sourceStep = currentStep
+        let transitionDirection: MomentCreationTransitionDirection = direction == .forward ? .forward : .backward
+        let plan = TransitionResolver.resolve(
+            from: sourceStep,
+            to: step,
+            direction: transitionDirection
+        )
+
+        switch plan.kind {
+        case .staged:
+            startStagedTransition(from: sourceStep, to: step, plan: plan)
+        case .push:
+            resetTransientTransitionState()
+            transitionElementPhases[step] = TransitionStateResolver.initialPhases(
+                for: step,
+                route: plan.route
+            )
+            focusedField = nil
+
+            withAnimation(containerStepAnimation) {
+                currentStep = step
+            }
+
+            schedulePlanStages(
+                from: sourceStep,
+                to: step,
+                plan: plan,
+                clearsStagedTransition: false
+            )
+        case .fallback:
+            resetTransientTransitionState()
+            transitionElementPhases[step] = TransitionStateResolver.settledPhases(for: step)
+
+            withAnimation(containerStepAnimation) {
+                currentStep = step
+            }
+        }
+    }
+
+    private var containerStepAnimation: Animation {
+        .easeInOut(duration: 0.3)
+    }
+
+    private func phases(
+        for step: MomentCreationScreenStep
+    ) -> MomentCreationTransitionElementPhases {
+        transitionElementPhases[step] ?? TransitionStateResolver.settledPhases(for: step)
+    }
+
+    private func startStagedTransition(
+        from sourceStep: MomentCreationScreenStep,
+        to destinationStep: MomentCreationScreenStep,
+        plan: MomentCreationTransitionPlan
+    ) {
+        activeTransitionPlan = plan
+        transitionSourceStep = sourceStep
+        transitionDestinationStep = destinationStep
+        transitionBackgroundOpacity = sourceStep == .capture ? 0 : 1
+        transitionSourceOpacity = 1
+        transitionElementPhases[sourceStep] = TransitionStateResolver.settledPhases(for: sourceStep)
+
+        var destinationPhases = TransitionStateResolver.initialPhases(
+            for: destinationStep,
+            route: plan.route
+        )
+        transitionElementPhases[destinationStep] = destinationPhases
+        focusedField = nil
+
+        switch plan.route {
+        case .captureToAlbumName, .captureToNote:
+            break
+        case .albumNameToNote, .noteToReminder, .noteToComplete, .reminderToComplete, .fallback:
+            currentStep = destinationStep
+        }
+
+        schedulePlanStages(
+            from: sourceStep,
+            to: destinationStep,
+            plan: plan,
+            clearsStagedTransition: true
+        )
+    }
+
+    private func schedulePlanStages(
+        from sourceStep: MomentCreationScreenStep,
+        to destinationStep: MomentCreationScreenStep,
+        plan: MomentCreationTransitionPlan,
+        clearsStagedTransition: Bool
+    ) {
+        let currentStepSwitchTime = currentStepSwitchTime(for: plan)
+        let stagedEvents = plan.stages
+            .map { stage in
+                (
+                    start: absoluteStart(for: stage, plan: plan),
+                    stage: stage
+                )
+            }
+            .sorted { $0.start < $1.start }
+
+        scheduleFocusIfNeeded(for: destinationStep, plan: plan)
+
+        transitionTask = Task { @MainActor in
+            var elapsed = 0
+            var hasSwitchedCurrentStep = currentStepSwitchTime == nil
+
+            for item in stagedEvents {
+                if let currentStepSwitchTime,
+                   hasSwitchedCurrentStep == false,
+                   currentStepSwitchTime <= item.start {
+                    let switchDelay = max(currentStepSwitchTime - elapsed, 0)
+                    if switchDelay > 0 {
+                        try? await Task.sleep(for: .milliseconds(switchDelay))
+                    }
+
+                    guard Task.isCancelled == false else {
+                        return
+                    }
+
+                    currentStep = destinationStep
+                    elapsed = currentStepSwitchTime
+                    hasSwitchedCurrentStep = true
+                }
+
+                let delay = max(item.start - elapsed, 0)
+                if delay > 0 {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                }
+
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                apply(item.stage, from: sourceStep, to: destinationStep, route: plan.route)
+                elapsed = item.start
+            }
+
+            if let currentStepSwitchTime,
+               hasSwitchedCurrentStep == false {
+                let switchDelay = max(currentStepSwitchTime - elapsed, 0)
+                if switchDelay > 0 {
+                    try? await Task.sleep(for: .milliseconds(switchDelay))
+                }
+
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                currentStep = destinationStep
+                elapsed = currentStepSwitchTime
+            }
+
+            let totalDuration = max(
+                stagedEvents.map { $0.start + $0.stage.durationMilliseconds }.max() ?? 0,
+                plan.containerTransition == .pushFromTrailing ? 300 : 0
+            )
+            let remaining = max(totalDuration - elapsed, 0)
+
+            if remaining > 0 {
+                try? await Task.sleep(for: .milliseconds(remaining))
+            }
+
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            finalizeTransition(
+                from: sourceStep,
+                to: destinationStep,
+                clearsStagedTransition: clearsStagedTransition
+            )
+        }
+    }
+
+    private func absoluteStart(
+        for stage: MomentCreationTransitionStage,
+        plan: MomentCreationTransitionPlan
+    ) -> Int {
+        let anchorOffset = switch stage.anchor {
+        case .routeStart:
+            0
+        case .containerCompletion:
+            plan.containerTransition == .pushFromTrailing ? 300 : 0
+        }
+
+        return anchorOffset + stage.startMilliseconds
+    }
+
+    private func scheduleFocusIfNeeded(
+        for step: MomentCreationScreenStep,
+        plan: MomentCreationTransitionPlan
+    ) {
+        focusTask?.cancel()
+
+        guard let targetField = TransitionStateResolver.focusField(for: step),
+              let delay = TransitionStateResolver.focusDelayMilliseconds(
+                  for: step,
+                  plan: plan
+              ) else {
+            return
+        }
+
+        focusTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(delay))
+
+            if currentStep == step, activeTransitionPlan != nil {
+                try? await Task.sleep(for: .milliseconds(60))
+            }
+
+            if currentStep == step, activeTransitionPlan == nil {
+                focusedField = targetField
+            }
+        }
+    }
+
+    private func apply(
+        _ stage: MomentCreationTransitionStage,
+        from sourceStep: MomentCreationScreenStep,
+        to destinationStep: MomentCreationScreenStep,
+        route: MomentCreationTransitionRoute
+    ) {
+        withAnimation(.easeInOut(duration: Double(stage.durationMilliseconds) / 1000)) {
+            for event in stage.events {
+                switch event.action {
+                case .transition:
+                    if event.element == .background {
+                        transitionBackgroundOpacity = 1
+
+                        if sourceStep == .capture {
+                            transitionSourceOpacity = 0
+                        }
+                    }
+                case .enter:
+                    var phases = transitionElementPhases[destinationStep]
+                        ?? TransitionStateResolver.initialPhases(
+                            for: destinationStep,
+                            route: route
+                        )
+                    phases[event.element] = .visible
+                    transitionElementPhases[destinationStep] = phases
+                case .exit:
+                    var phases = transitionElementPhases[sourceStep]
+                        ?? TransitionStateResolver.settledPhases(for: sourceStep)
+                    phases[event.element] = .hiddenAbove
+                    transitionElementPhases[sourceStep] = phases
+                }
+            }
+        }
+    }
+
+    private func finalizeTransition(
+        from sourceStep: MomentCreationScreenStep,
+        to destinationStep: MomentCreationScreenStep,
+        clearsStagedTransition: Bool
+    ) {
+        transitionElementPhases[destinationStep] = TransitionStateResolver.settledPhases(for: destinationStep)
+        transitionElementPhases[sourceStep] = nil
+        transitionTask = nil
+        transitionSourceOpacity = 1
+
+        if clearsStagedTransition {
+            activeTransitionPlan = nil
+            transitionSourceStep = nil
+            transitionDestinationStep = nil
+            transitionBackgroundOpacity = destinationStep == .capture ? 0 : 1
+        }
+    }
+
+    private func resetTransientTransitionState() {
+        activeTransitionPlan = nil
+        transitionSourceStep = nil
+        transitionDestinationStep = nil
+        transitionBackgroundOpacity = currentStep == .capture ? 0 : 1
+        transitionSourceOpacity = 1
+        transitionTask = nil
+    }
+
+    private func sourceOpacity(for step: MomentCreationScreenStep) -> Double {
+        step == transitionSourceStep ? transitionSourceOpacity : 1
+    }
+
+    private func currentStepSwitchTime(for plan: MomentCreationTransitionPlan) -> Int? {
+        switch plan.route {
+        case .captureToAlbumName, .captureToNote:
+            guard let fadeStage = plan.stages.first(where: { stage in
+                stage.events.contains { event in
+                    event.element == .background && event.action == .transition
+                }
+            }) else {
+                return nil
+            }
+
+            return absoluteStart(for: fadeStage, plan: plan) + fadeStage.durationMilliseconds
+        case .albumNameToNote, .noteToReminder, .noteToComplete, .reminderToComplete, .fallback:
+            return nil
         }
     }
 
