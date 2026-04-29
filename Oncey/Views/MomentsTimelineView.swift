@@ -2,16 +2,13 @@ import SwiftUI
 #if canImport(SwiftData)
 import SwiftData
 #endif
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct MomentsTimelineView: View {
     @Environment(\.modelContext) private var modelContext
 
     let album: Album
     @State private var isCreationPresented = false
-    @State private var pendingEditorInput: TimelinePendingEditorInput?
+    @State private var pendingNoteEditorInput: TimelinePendingNoteEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
     @State private var currentMomentID: UUID?
     @State private var pendingSingleDeleteMoment: Moment?
@@ -67,8 +64,11 @@ struct MomentsTimelineView: View {
         }
         .navigationTitle(viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(item: $pendingEditorInput) { input in
-            MomentEditorView(mode: .editMoment(moment: input.moment))
+        .sheet(item: $pendingNoteEditorInput) { input in
+            NavigationStack {
+                MomentNoteEditorSheet(moment: input.moment)
+            }
+            .presentationDetents([.medium])
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -114,11 +114,14 @@ struct MomentsTimelineView: View {
     }
 
     private func timelineRow(for moment: Moment, metrics: MomentTimelinePageMetrics) -> some View {
-        let row = MomentTimelineRowView(
+        MomentTimelineRowView(
             moment: moment,
             timestampText: viewModel.timestampText(for: moment),
             metrics: metrics,
             isCurrent: isCurrent(moment),
+            onEditNote: {
+                pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
+            },
             onShare: {
                 pendingShareInput = TimelinePendingShareInput(moment: moment)
             },
@@ -126,13 +129,6 @@ struct MomentsTimelineView: View {
                 pendingSingleDeleteMoment = moment
             }
         )
-
-        return Button {
-            handleMomentTap(moment)
-        } label: {
-            row
-        }
-        .buttonStyle(.plain)
     }
 
     private var isPresentingSingleDeleteAlert: Binding<Bool> {
@@ -152,17 +148,6 @@ struct MomentsTimelineView: View {
         }
 
         return viewModel.moments.first?.id == moment.id
-    }
-
-    private func handleMomentTap(_ moment: Moment) {
-        guard isCurrent(moment) else {
-            withAnimation(.snappy) {
-                currentMomentID = moment.id
-            }
-            return
-        }
-
-        pendingEditorInput = TimelinePendingEditorInput(moment: moment)
     }
 
     private func syncCurrentMomentID(with moments: [Moment]) {
@@ -202,7 +187,7 @@ private struct TimelinePendingShareInput: Identifiable {
     let moment: Moment
 }
 
-private struct TimelinePendingEditorInput: Hashable, Identifiable {
+private struct TimelinePendingNoteEditorInput: Hashable, Identifiable {
     let id: UUID
     let moment: Moment
 
@@ -211,7 +196,7 @@ private struct TimelinePendingEditorInput: Hashable, Identifiable {
         self.moment = moment
     }
 
-    static func == (lhs: TimelinePendingEditorInput, rhs: TimelinePendingEditorInput) -> Bool {
+    static func == (lhs: TimelinePendingNoteEditorInput, rhs: TimelinePendingNoteEditorInput) -> Bool {
         lhs.id == rhs.id
     }
 

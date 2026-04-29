@@ -136,6 +136,94 @@ struct OnceyTests {
     #expect(!FileManager.default.fileExists(atPath: photoURL.path(percentEncoded: false)))
     }
 
+    @Test func momentNoteUpdatesAndClearsPersistedChanges() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
+        let firstUpdatedAt = Date(timeIntervalSince1970: 1_713_747_600)
+        let clearedAt = Date(timeIntervalSince1970: 1_713_751_200)
+
+        let album = Album(name: "Notes", createdAt: createdAt, updatedAt: createdAt)
+        let moment = Moment(
+            album: album,
+            photo: "/tmp/note-update.jpg",
+            note: "Original note",
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+
+        context.insert(album)
+        context.insert(moment)
+        try context.save()
+
+        try MomentNoteUpdateService.update(
+            moment,
+            note: "Updated note",
+            in: context,
+            updatedAt: firstUpdatedAt
+        )
+
+        let updatedMoment = try #require(ModelContext(container).fetch(FetchDescriptor<Moment>()).first)
+        #expect(updatedMoment.note == "Updated note")
+        #expect(updatedMoment.createdAt == createdAt)
+        #expect(updatedMoment.updatedAt == firstUpdatedAt)
+
+        try MomentNoteUpdateService.update(
+            moment,
+            note: "  \n\n  ",
+            in: context,
+            updatedAt: clearedAt
+        )
+
+        let clearedMoment = try #require(ModelContext(container).fetch(FetchDescriptor<Moment>()).first)
+        #expect(clearedMoment.note.isEmpty)
+        #expect(clearedMoment.createdAt == createdAt)
+        #expect(clearedMoment.updatedAt == clearedAt)
+    }
+
+    @Test func momentNoteUpdateRollsBackLiveValuesWhenSaveFails() throws {
+        enum SaveFailure: Error {
+            case failed
+        }
+
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
+        let failedUpdatedAt = Date(timeIntervalSince1970: 1_713_747_600)
+
+        let album = Album(name: "Notes", createdAt: createdAt, updatedAt: createdAt)
+        let moment = Moment(
+            album: album,
+            photo: "/tmp/note-update.jpg",
+            note: "Original note",
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+
+        context.insert(album)
+        context.insert(moment)
+        try context.save()
+
+        var thrownError: Error?
+
+        do {
+            try MomentNoteUpdateService.update(
+                moment,
+                note: "Replacement note",
+                updatedAt: failedUpdatedAt,
+                save: {
+                    throw SaveFailure.failed
+                }
+            )
+        } catch {
+            thrownError = error
+        }
+
+        #expect(thrownError is SaveFailure)
+        #expect(moment.note == "Original note")
+        #expect(moment.updatedAt == createdAt)
+    }
+
     @MainActor
     @Test func shareExportCreatesImageFile() throws {
         let photoPath = try AppImageStore.store(makeImage(color: .systemOrange))

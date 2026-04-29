@@ -10,6 +10,7 @@ struct MomentTimelineRowView: View {
     let timestampText: String
     let metrics: MomentTimelinePageMetrics
     let isCurrent: Bool
+    let onEditNote: (() -> Void)?
     let onShare: (() -> Void)?
     let onDelete: (() -> Void)?
 
@@ -18,6 +19,7 @@ struct MomentTimelineRowView: View {
         timestampText: String,
         metrics: MomentTimelinePageMetrics,
         isCurrent: Bool,
+        onEditNote: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil
     ) {
@@ -25,6 +27,7 @@ struct MomentTimelineRowView: View {
         self.timestampText = timestampText
         self.metrics = metrics
         self.isCurrent = isCurrent
+        self.onEditNote = onEditNote
         self.onShare = onShare
         self.onDelete = onDelete
     }
@@ -33,9 +36,16 @@ struct MomentTimelineRowView: View {
         pageContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, metrics.horizontalPadding)
+            .contentShape(Rectangle())
             .opacity(isCurrent ? 1 : 0.3)
             .animation(.easeOut(duration: 0.3), value: isCurrent)
             .contextMenu {
+                if let onEditNote {
+                    Button(action: onEditNote) {
+                        Label("Note", systemImage: "long.text.page.and.pencil")
+                    }
+                }
+
                 if let onShare {
                     Button(action: onShare) {
                         Label("Share", systemImage: "square.and.arrow.up")
