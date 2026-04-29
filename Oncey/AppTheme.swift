@@ -63,6 +63,12 @@ enum AppTheme {
 
     enum Layout {
         static let timelinePhotoMaxWidthRatio: CGFloat = 0.7
+        static let timelinePageHeightRatio: CGFloat = 0.7
+        static let timelinePageHorizontalPadding: CGFloat = Spacing.s6
+        static let timelinePageContentSpacing: CGFloat = Spacing.s3
+        static let timelineTimestampHeight: CGFloat = 28
+        static let timelineNoteHeight: CGFloat = 32
+        static let timelineDotSize: CGFloat = 12
 
         static var screenWidth: CGFloat {
 #if canImport(UIKit)
