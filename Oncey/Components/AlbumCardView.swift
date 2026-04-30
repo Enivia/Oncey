@@ -10,7 +10,6 @@ struct AlbumCardView: View {
     let coverPhotoPath: String?
     let albumCreatedText: String
     let momentCountText: String
-    let latestMomentCreatedText: String?
     let reminderCountdownText: String?
     let displayedMomentNodeCount: Int
     let showsReminderNode: Bool
@@ -24,38 +23,30 @@ struct AlbumCardView: View {
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
 
-                if let latestMomentCreatedText {
-                    HStack(alignment: .center, spacing: AppTheme.Spacing.s2) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                        Text(latestMomentCreatedText)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                    }
-                    .padding(.top, 2)
-                }
-
                 AlbumTimelineSummaryView(
                     momentNodeCount: displayedMomentNodeCount,
                     showsReminderNode: showsReminderNode
                 )
-                .padding(.top, AppTheme.Spacing.s3)
+                .padding(.top, AppTheme.Spacing.s1)
 
-                HStack(alignment: .center, spacing: AppTheme.Spacing.s4) {
+                HStack(alignment: .center) {
                     Text(albumCreatedText)
                         .font(.footnote.weight(.light))
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                         .lineLimit(1)
-
+                    
                     Spacer(minLength: AppTheme.Spacing.s4)
 
-                    Text(momentCountText)
-                        .font(.footnote)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
+                    HStack(alignment: .center, spacing: AppTheme.Spacing.s1) {
+                        Image(systemName: "square.stack.3d.down.right")
+                            .font(.system(size: 12).weight(.medium))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                        Text(momentCountText)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
                 }
                 .padding(.top, AppTheme.Spacing.s1)
             }
@@ -71,10 +62,10 @@ struct AlbumCardView: View {
         .overlay(alignment: .topTrailing) {
             if let reminderCountdownText {
                 Text(reminderCountdownText)
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.accent)
-                    .padding(.horizontal, AppTheme.Spacing.s2)
-                    .padding(.vertical, AppTheme.Spacing.s1)
+                    .padding(.horizontal, AppTheme.Spacing.s3)
+                    .padding(.vertical, AppTheme.Spacing.s2)
                     .glassEffect()
                     .padding(.trailing, 12)
                     .padding(.top, 12)
@@ -229,9 +220,8 @@ private enum AlbumTimelineNodeStyle {
     AlbumCardView(
         album: album,
         coverPhotoPath: nil,
-        albumCreatedText: "Apr 13, 2026",
+        albumCreatedText: "From Apr 13, 2026",
         momentCountText: "2 Moments",
-        latestMomentCreatedText: "Apr 25, 2026",
         reminderCountdownText: "4 days later",
         displayedMomentNodeCount: 2,
         showsReminderNode: true

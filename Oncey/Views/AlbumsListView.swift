@@ -50,7 +50,6 @@ struct AlbumsListView: View {
                                         coverPhotoPath: viewModel.coverPhotoPath(for: album),
                                         albumCreatedText: viewModel.albumCreatedText(for: album),
                                         momentCountText: viewModel.momentCountText(for: album),
-                                        latestMomentCreatedText: viewModel.latestMomentCreatedText(for: album),
                                         reminderCountdownText: viewModel.reminderCountdownText(for: album),
                                         displayedMomentNodeCount: viewModel.displayedMomentNodeCount(for: album),
                                         showsReminderNode: viewModel.showsReminderNode(for: album)
@@ -184,6 +183,10 @@ private struct AlbumReminderEntryView: View {
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.s5) {
+            Circle()
+                .fill(.accent)
+                .frame(width: 10, height: 10)
+            
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
                 Text(albumName)
                     .font(.title3.weight(.medium))

@@ -69,18 +69,6 @@ final class AlbumsViewModel {
             }
     }
 
-    func latestMomentCreatedText(for album: Album) -> String? {
-        latestMomentCreatedText(for: album, formatter: Self.dateFormatter)
-    }
-
-    func latestMomentCreatedText(for album: Album, formatter: DateFormatter) -> String? {
-        guard let latestMoment = latestMoment(for: album) else {
-            return nil
-        }
-
-        return formatter.string(from: latestMoment.createdAt)
-    }
-
     func albumCreatedText(for album: Album) -> String {
         albumCreatedText(for: album, formatter: Self.dateFormatter)
     }
