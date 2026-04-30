@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct AlbumsListView: View {
+struct AlbumsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Album.updatedAt, order: .reverse), SortDescriptor(\Album.createdAt, order: .reverse)]) private var albums: [Album]
     @State private var viewModel = AlbumsViewModel()
@@ -262,7 +262,7 @@ private struct AlbumReminderEntryView: View {
     container.mainContext.insert(album3)
 
     return NavigationStack {
-        AlbumsListView()
+        AlbumsView()
     }
     .modelContainer(container)
 }

@@ -15,10 +15,10 @@ struct AlbumCardView: View {
     let showsReminderNode: Bool
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
             coverImage
 
-            VStack(alignment: .leading){
+            VStack(alignment: .leading, spacing: 0){
                 Text(album.name)
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
@@ -27,7 +27,7 @@ struct AlbumCardView: View {
                     momentNodeCount: displayedMomentNodeCount,
                     showsReminderNode: showsReminderNode
                 )
-                .padding(.top, AppTheme.Spacing.s1)
+                .padding(.top, AppTheme.Spacing.s4)
 
                 HStack(alignment: .center) {
                     Text(albumCreatedText)
@@ -48,7 +48,7 @@ struct AlbumCardView: View {
                             .lineLimit(1)
                     }
                 }
-                .padding(.top, AppTheme.Spacing.s1)
+                .padding(.top, AppTheme.Spacing.s2)
             }
             .padding(AppTheme.Spacing.s5)
         }
@@ -220,7 +220,7 @@ private enum AlbumTimelineNodeStyle {
     AlbumCardView(
         album: album,
         coverPhotoPath: nil,
-        albumCreatedText: "From Apr 13, 2026",
+        albumCreatedText: "Apr 13, 2026",
         momentCountText: "2 Moments",
         reminderCountdownText: "4 days later",
         displayedMomentNodeCount: 2,
