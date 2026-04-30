@@ -7,18 +7,26 @@ import AppKit
 
 enum AppTheme {
     enum Colors {
-        static let accent = Color(rgbHex: 0x79C6CE)
+        static let accent = Color(rgbHex: 0x5B7ACF)
+        static let accentSoft = Color(rgbHex: 0x8BA4EB)
+        static let accentStroke = Color(rgbHex: 0xDCE6FF)
+        
+        static let secondary = Color(rgbHex: 0x6A5780)
+        static let secondarySoft = Color(rgbHex: 0xE9E2F4)
+        
         static let surface = Color.white
         static let border = Color(rgbHex: 0xF1F3F5)
+        static let divider = Color(rgbHex: 0xC3CBD0)
+        
         static let shadow = Color(argbHex: 0x0D2C3437)
         static let shadowEmphasis = Color(argbHex: 0x1A2C3437)
-        static let textPrimary = Color(rgbHex: 0x191919)
-        static let textSecondary = Color(rgbHex: 0x4D4F52)
-        static let background = Color(rgbHex: 0xF5F7FB)
-        static let backgroundDot = Color(argbHex: 0x55B2E2E6)
-        static let accentSoft = accent.opacity(0.16)
-        static let accentStroke = accent.opacity(0.8)
-        static let divider = textSecondary.opacity(0.18)
+        
+        static let textPrimary = Color(rgbHex: 0x2C3437)
+        static let textSecondary = Color(rgbHex: 0x617075)
+        
+        static let background = Color(rgbHex: 0xF8FAFC)
+        static let backgroundDot = accent.opacity(0.1)
+        
     }
 
     enum Spacing {

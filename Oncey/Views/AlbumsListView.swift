@@ -2,11 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct AlbumsListView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Album.updatedAt, order: .reverse), SortDescriptor(\Album.createdAt, order: .reverse)]) private var albums: [Album]
     @State private var viewModel = AlbumsViewModel()
     @State private var isCreationPresented = false
     @State private var reminderCreationTarget: ReminderCreationTarget?
     @State private var pendingTimelineAlbumID: UUID?
+    @State private var pendingDeleteAlbum: Album?
+    @State private var errorTitle = "Couldn't delete album"
     @State private var errorMessage: String?
     @State private var isPresentingError = false
 
@@ -45,8 +48,8 @@ struct AlbumsListView: View {
                                     AlbumCardView(
                                         album: album,
                                         coverPhotoPath: viewModel.coverPhotoPath(for: album),
+                                        albumCreatedText: viewModel.albumCreatedText(for: album),
                                         momentCountText: viewModel.momentCountText(for: album),
-                                        layerCount: viewModel.layerCount(for: album),
                                         latestMomentCreatedText: viewModel.latestMomentCreatedText(for: album),
                                         reminderCountdownText: viewModel.reminderCountdownText(for: album),
                                         displayedMomentNodeCount: viewModel.displayedMomentNodeCount(for: album),
@@ -54,6 +57,13 @@ struct AlbumsListView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        pendingDeleteAlbum = album
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.s6)
@@ -95,7 +105,24 @@ struct AlbumsListView: View {
                 EmptyView()
             }
         }
-        .alert("Couldn't load photo", isPresented: $isPresentingError) {
+        .alert("Delete this album?", isPresented: isPresentingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                guard let pendingDeleteAlbum else {
+                    return
+                }
+
+                deleteAlbum(pendingDeleteAlbum)
+                self.pendingDeleteAlbum = nil
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDeleteAlbum = nil
+            }
+        } message: {
+            let albumName = pendingDeleteAlbum?.name ?? "this album"
+            Text("This will delete \(albumName) and all associated moments.")
+        }
+        .alert(errorTitle, isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "Please try again.")
@@ -124,6 +151,27 @@ struct AlbumsListView: View {
             }
         )
     }
+
+    private var isPresentingDeleteAlert: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteAlbum != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteAlbum = nil
+                }
+            }
+        )
+    }
+
+    private func deleteAlbum(_ album: Album) {
+        do {
+            try AlbumDeletionService.delete(album, in: modelContext)
+        } catch {
+            errorTitle = "Couldn't delete album"
+            errorMessage = error.localizedDescription
+            isPresentingError = true
+        }
+    }
 }
 
 private struct ReminderCreationTarget: Identifiable {
@@ -139,20 +187,18 @@ private struct AlbumReminderEntryView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
                 Text(albumName)
                     .font(.title3.weight(.medium))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(1)
 
                 Text(reminderText)
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .frame(width: 16, height: 16)
-                .foregroundStyle(AppTheme.Colors.textSecondary.opacity(0.6))
+                .foregroundStyle(AppTheme.Colors.accentSoft)
         }
         .padding(AppTheme.Spacing.s5)
         .frame(maxWidth: .infinity, alignment: .leading)

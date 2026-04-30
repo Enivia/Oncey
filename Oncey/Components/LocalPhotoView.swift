@@ -60,14 +60,14 @@ struct LocalPhotoView: View {
     private var placeholder: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 0.95, green: 0.89, blue: 0.74), Color(red: 0.79, green: 0.88, blue: 0.92)],
+                colors: [AppTheme.Colors.accentSoft, AppTheme.Colors.secondarySoft],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
             Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 34, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(.white)
         }
     }
 }

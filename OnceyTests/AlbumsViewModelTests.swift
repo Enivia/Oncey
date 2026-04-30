@@ -4,6 +4,38 @@ import Testing
 
 @MainActor
 struct AlbumsViewModelTests {
+    @Test func latestMomentAndAlbumCreatedTextsUseProvidedFormatter() {
+        let viewModel = AlbumsViewModel()
+        let formatter = DateFormatter()
+        formatter.calendar = makeCalendar()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        let album = makeAlbum(
+            name: "Dates",
+            momentDates: [
+                makeDate(year: 2026, month: 4, day: 11, hour: 9),
+                makeDate(year: 2026, month: 4, day: 27, hour: 21)
+            ]
+        )
+
+        #expect(viewModel.latestMomentCreatedText(for: album, formatter: formatter) == "2026-04-27")
+        #expect(viewModel.albumCreatedText(for: album, formatter: formatter) == "2026-04-01")
+    }
+
+    @Test func latestMomentCreatedTextIsNilWhenAlbumHasNoMoments() {
+        let viewModel = AlbumsViewModel()
+        let formatter = DateFormatter()
+        formatter.calendar = makeCalendar()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        let album = makeAlbum(name: "Empty")
+
+        #expect(viewModel.latestMomentCreatedText(for: album, formatter: formatter) == nil)
+    }
+
     @Test func nextReminderAlbumSelectsClosestUpcomingReminderWithinTenDays() {
         let viewModel = AlbumsViewModel()
         let calendar = makeCalendar()

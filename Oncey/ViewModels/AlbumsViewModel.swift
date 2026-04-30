@@ -32,10 +32,6 @@ final class AlbumsViewModel {
         latestMoment(for: album)?.photo
     }
 
-    func layerCount(for album: Album) -> Int {
-        max(1, min(album.moments.count, 5))
-    }
-
     func momentCountText(for album: Album) -> String {
         let count = album.moments.count
         return count == 1 ? "1 Moment" : "\(count) Moments"
@@ -74,11 +70,23 @@ final class AlbumsViewModel {
     }
 
     func latestMomentCreatedText(for album: Album) -> String? {
+        latestMomentCreatedText(for: album, formatter: Self.dateFormatter)
+    }
+
+    func latestMomentCreatedText(for album: Album, formatter: DateFormatter) -> String? {
         guard let latestMoment = latestMoment(for: album) else {
             return nil
         }
 
-        return Self.dateFormatter.string(from: latestMoment.createdAt)
+        return formatter.string(from: latestMoment.createdAt)
+    }
+
+    func albumCreatedText(for album: Album) -> String {
+        albumCreatedText(for: album, formatter: Self.dateFormatter)
+    }
+
+    func albumCreatedText(for album: Album, formatter: DateFormatter) -> String {
+        formatter.string(from: album.createdAt)
     }
 
     func reminderCountdownText(
