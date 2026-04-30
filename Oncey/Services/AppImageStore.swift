@@ -16,7 +16,9 @@ enum AppImageStore {
             .appendingPathExtension("jpg")
 
         try write(image, to: destinationURL)
-        return managedReference(for: destinationURL, in: photoDirectoryName)
+        let reference = managedReference(for: destinationURL, in: photoDirectoryName)
+        ImageResourceService.primeImageCache(image, for: reference)
+        return reference
     }
 
     static func storeOutline(_ image: UIImage) throws -> String {
@@ -40,7 +42,9 @@ enum AppImageStore {
     static func replaceImage(at existingPath: String?, with image: UIImage) throws -> String {
         if let existingPath, let destinationURL = managedFileURL(for: existingPath, in: photoDirectoryName) {
             try write(image, to: destinationURL)
-            return managedReference(for: destinationURL, in: photoDirectoryName)
+            let reference = managedReference(for: destinationURL, in: photoDirectoryName)
+            ImageResourceService.primeImageCache(image, for: reference)
+            return reference
         }
 
         return try store(image)
@@ -68,6 +72,7 @@ enum AppImageStore {
             return
         }
 
+        ImageResourceService.removeCachedResource(for: path)
         try? FileManager.default.removeItem(at: destinationURL)
     }
 

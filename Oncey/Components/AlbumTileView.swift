@@ -37,16 +37,10 @@ struct AlbumTileView: View {
                     
                     Spacer(minLength: AppTheme.Spacing.s4)
 
-                    HStack(alignment: .center, spacing: AppTheme.Spacing.s1) {
-                        Image(systemName: "square.stack.3d.down.right")
-                            .font(.system(size: 12).weight(.medium))
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-
-                        Text(momentCountText)
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                    }
+                    Text(momentCountText)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .lineLimit(1)
                 }
                 .padding(.top, AppTheme.Spacing.s2)
             }
@@ -114,7 +108,7 @@ private struct AlbumTimelineSummaryView: View {
     let momentNodeCount: Int
     let showsReminderNode: Bool
 
-    private let maxNodeSlotCount = 6
+    private let maxNodeSlotCount = 7
 
     private var nodeStyles: [AlbumTimelineNodeStyle] {
         let momentNodes = Array(repeating: AlbumTimelineNodeStyle.moment, count: momentNodeCount)
@@ -134,7 +128,7 @@ private struct AlbumTimelineSummaryView: View {
             let lineEndX = max(lineStartX, geometry.size.width - nodeRadius)
             let displayedNodeStyles = Array(nodeStyles.prefix(maxNodeSlotCount))
             let stepCount = max(maxNodeSlotCount - 1, 1)
-            let usableWidth = max(0, lineEndX - lineStartX - 50)
+            let usableWidth = max(0, lineEndX - lineStartX - 32)
 
             ZStack {
                 Path { path in
@@ -166,7 +160,7 @@ private struct AlbumTimelineNodeView: View {
     var body: some View {
         Circle()
             .fill(fillColor)
-            .frame(width: 10, height: 10)
+            .frame(width: 6, height: 6)
             .overlay {
                 Circle()
                     .stroke(strokeColor, style: strokeStyle)

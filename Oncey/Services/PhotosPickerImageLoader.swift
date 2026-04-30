@@ -1,20 +1,39 @@
 #if canImport(UIKit)
 import Foundation
+import ImageIO
 import PhotosUI
 import SwiftUI
 import UIKit
 
 enum PhotosPickerImageLoader {
+    static let maximumPixelSize: CGFloat = 4_096
+
     static func loadImage(from item: PhotosPickerItem) async throws -> UIImage {
         guard let data = try await item.loadTransferable(type: Data.self) else {
             throw PhotosPickerImageLoaderError.loadFailed
         }
 
-        guard let image = UIImage(data: data) else {
+        return try decodeImage(from: data)
+    }
+
+    static func decodeImage(from data: Data, maximumPixelSize: CGFloat = maximumPixelSize) throws -> UIImage {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw PhotosPickerImageLoaderError.decodingFailed
         }
 
-        return image
+        let pixelLimit = max(Int(maximumPixelSize.rounded(.up)), 1)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: pixelLimit
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw PhotosPickerImageLoaderError.decodingFailed
+        }
+
+        return UIImage(cgImage: cgImage)
     }
 }
 

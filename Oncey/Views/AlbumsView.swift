@@ -183,9 +183,6 @@ private struct AlbumReminderEntryView: View {
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.s5) {
-            Circle()
-                .fill(.accent)
-                .frame(width: 10, height: 10)
             
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
                 Text(albumName)

@@ -190,6 +190,7 @@ private enum MomentCreationCaptureSource {
 }
 
 private struct MomentCreationCaptureDraft {
+    let id = UUID()
     let image: UIImage
     let source: MomentCreationCaptureSource
 }
@@ -222,6 +223,11 @@ private struct MomentCreationCaptureLayout: Equatable {
 }
 
 struct CreationView: View {
+    private static let imageProcessingQueue = DispatchQueue(
+        label: "Oncey.Creation.image-processing",
+        qos: .userInitiated
+    )
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -361,19 +367,9 @@ struct CreationView: View {
 
     private var contentStack: some View {
         VStack(spacing: AppTheme.Spacing.s6) {
-            workflowProgressSection
             stepContent
         }
         .padding(.bottom, isCaptureStep ? 0 : AppTheme.Spacing.s6)
-    }
-
-    @ViewBuilder
-    private var workflowProgressSection: some View {
-        if currentWorkflowStep != nil {
-            progressBar
-                .padding(.horizontal, AppTheme.Spacing.s6)
-                .padding(.top, AppTheme.Spacing.s2)
-        }
     }
 
     private var backgroundView: AnyView {
@@ -434,8 +430,7 @@ struct CreationView: View {
                     focus: $focusedField,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
-                    albumName: $albumName,
-                    onNext: advanceFromAlbumName
+                    albumName: $albumName
                 )
             )
         case .note:
@@ -451,12 +446,7 @@ struct CreationView: View {
                     focus: $focusedField,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
-                    note: $note,
-                    onNext: {
-                        Task {
-                            await advanceFromNote()
-                        }
-                    }
+                    note: $note
                 )
             )
         case .reminder:
@@ -574,6 +564,12 @@ struct CreationView: View {
                 }
             }
         } else if let currentWorkflowStep, let workflowChrome {
+            ToolbarItem(placement: .principal) {
+                progressBar
+                    .frame(width: 72)
+                    .accessibilityLabel("Progress")
+            }
+
             ToolbarItem(placement: .topBarLeading) {
                 switch workflowChrome.leadingAction {
                 case .back:
@@ -593,7 +589,17 @@ struct CreationView: View {
                 }
             }
 
-            if workflowChrome.showsShare, createdMoment != nil {
+            if currentWorkflowStep == .albumName || currentWorkflowStep == .note {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        goForwardFromWorkflowToolbar()
+                    } label: {
+                        Image(systemName: "checkmark")
+                    }
+                    .disabled(isWorkflowToolbarConfirmationDisabled)
+                    .accessibilityLabel("Next")
+                }
+            } else if workflowChrome.showsShare, createdMoment != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         guard let createdMoment else {
@@ -889,6 +895,27 @@ struct CreationView: View {
         }
     }
 
+    private var isWorkflowToolbarConfirmationDisabled: Bool {
+        guard currentWorkflowStep == .albumName else {
+            return false
+        }
+
+        return albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func goForwardFromWorkflowToolbar() {
+        switch currentWorkflowStep {
+        case .albumName:
+            advanceFromAlbumName()
+        case .note:
+            Task {
+                await advanceFromNote()
+            }
+        case .reminder, .complete, .none:
+            break
+        }
+    }
+
     private func handleCurrentStepChange(_ step: MomentCreationScreenStep) {
         updateCameraLifecycle(for: step)
 
@@ -1105,13 +1132,14 @@ struct CreationView: View {
             return
         }
 
+        triggerCaptureFlash()
+
         camera.capturePhoto { result in
             switch result {
             case .success(let image):
-                let capturedImage = CameraImageCropper.croppedImage(image, aspect: captureAspect)
                 cameraCaptureState.finishCapture()
-                setCaptureDraft(capturedImage, source: .camera)
-                triggerCaptureFlash()
+                let draft = setCaptureDraft(image, source: .camera)
+                prepareCameraImage(image, aspect: captureAspect, matching: draft.id)
             case .failure(let error):
                 cameraCaptureState.finishCapture()
                 present(error.localizedDescription)
@@ -1164,7 +1192,7 @@ struct CreationView: View {
 
         do {
             let now = Date.now
-            let photoPath = try AppImageStore.store(preparedImage)
+            let photoPath = try await storeMomentImage(preparedImage)
             let previousMoment = mode.latestMoment
             let album = try prepareAlbumForSave(at: now)
             let moment = Moment(
@@ -1175,11 +1203,13 @@ struct CreationView: View {
                 updatedAt: now
             )
 
-            if mode.isCreatingAlbum {
+            if album.modelContext == nil {
                 modelContext.insert(album)
             }
 
-            modelContext.insert(moment)
+            if moment.modelContext == nil {
+                modelContext.insert(moment)
+            }
             try modelContext.save()
 
             let scheduleOutcome = try await finalizeReminderIfNeeded(for: album)
@@ -1334,6 +1364,10 @@ struct CreationView: View {
             return preparedImage ?? UIImage()
         }
 
+        if captureDraft.source == .camera {
+            return preparedImage ?? CameraImageCropper.croppedImage(captureDraft.image, aspect: selectedAspect)
+        }
+
         switch previewCropMode {
         case .adjustable, .fixed:
             return CameraImageCropper.croppedImage(
@@ -1348,10 +1382,13 @@ struct CreationView: View {
         }
     }
 
-    private func setCaptureDraft(_ image: UIImage, source: MomentCreationCaptureSource) {
-        captureDraft = MomentCreationCaptureDraft(image: image, source: source)
+    @discardableResult
+    private func setCaptureDraft(_ image: UIImage, source: MomentCreationCaptureSource) -> MomentCreationCaptureDraft {
+        let draft = MomentCreationCaptureDraft(image: image, source: source)
+        captureDraft = draft
         preparedImage = nil
         resetCaptureCropTransform()
+        return draft
     }
 
     private func resetCaptureDraft() {
@@ -1367,6 +1404,37 @@ struct CreationView: View {
         committedCaptureCropOffset = .zero
         captureCropZoomScale = 1
         committedCaptureCropZoomScale = 1
+    }
+
+    private func prepareCameraImage(
+        _ image: UIImage,
+        aspect: CameraCaptureAspect,
+        matching draftID: UUID
+    ) {
+        Self.imageProcessingQueue.async {
+            let preparedImage = CameraImageCropper.croppedImage(image, aspect: aspect)
+
+            Task { @MainActor in
+                guard captureDraft?.id == draftID else {
+                    return
+                }
+
+                self.preparedImage = preparedImage
+            }
+        }
+    }
+
+    private func storeMomentImage(_ image: UIImage) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            Self.imageProcessingQueue.async {
+                do {
+                    let path = try AppImageStore.store(image)
+                    continuation.resume(returning: path)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private func navigate(to step: MomentCreationScreenStep, direction: MomentCreationNavigationDirection) {

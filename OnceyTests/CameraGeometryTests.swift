@@ -1,5 +1,8 @@
 import CoreGraphics
 import Testing
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import Oncey
 
 struct CameraGeometryTests {
@@ -154,6 +157,27 @@ struct CameraGeometryTests {
         #expect(isClose(cropRect.width, 200))
         #expect(isClose(cropRect.height, 200))
     }
+
+#if canImport(UIKit)
+    @Test func cropperOutputSizeCapsLargeCropRect() {
+        let outputSize = CameraImageCropper.outputSize(
+            for: CGRect(x: 0, y: 0, width: 5_000, height: 3_000),
+            maximumLongEdge: 2_048
+        )
+
+        #expect(isClose(outputSize.width, 2_048, tolerance: 0.01))
+        #expect(isClose(outputSize.height, 1_228.8, tolerance: 0.01))
+    }
+
+    @Test func cropperOutputSizeRejectsInvalidCropRect() {
+        let outputSize = CameraImageCropper.outputSize(
+            for: CGRect(x: 0, y: 0, width: CGFloat.infinity, height: 100),
+            maximumLongEdge: 2_048
+        )
+
+        #expect(outputSize == .zero)
+    }
+#endif
 
     private func isClose(_ lhs: CGFloat, _ rhs: CGFloat, tolerance: CGFloat = 0.001) -> Bool {
         abs(lhs - rhs) <= tolerance

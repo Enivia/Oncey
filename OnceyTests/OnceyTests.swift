@@ -32,6 +32,14 @@ struct OnceyTests {
         #expect(AppImageStore.isManagedPath(storedReference))
     }
 
+    @Test func imageResourceServiceReturnsStoredImageSize() throws {
+        let image = makeImage(size: CGSize(width: 640, height: 480), color: .systemPink)
+        let storedReference = try AppImageStore.store(image)
+        defer { AppImageStore.deleteImageIfManaged(at: storedReference) }
+
+        #expect(ImageResourceService.imageSize(from: storedReference) == image.size)
+    }
+
     @Test func legacyManagedAbsoluteImagePathsResolveToCurrentStore() throws {
         let storedReference = try AppImageStore.store(makeImage(color: .systemIndigo))
         defer { AppImageStore.deleteImageIfManaged(at: storedReference) }
@@ -337,6 +345,59 @@ struct OnceyTests {
         #expect(remainingMoments.isEmpty)
     }
 
+    @Test func laterMomentCanBeSavedOnExistingAlbumWithoutReinsertingManagedModels() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
+        let laterDate = createdAt.addingTimeInterval(3_600)
+
+        let album = Album(
+            name: "Existing Album",
+            ratio: .threeByFour,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+        let firstMoment = Moment(
+            album: album,
+            photo: "/tmp/first.jpg",
+            note: "First",
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+
+        context.insert(album)
+        context.insert(firstMoment)
+        try context.save()
+
+        album.updatedAt = laterDate
+
+        let laterMoment = Moment(
+            album: album,
+            photo: "/tmp/later.jpg",
+            note: "Later",
+            createdAt: laterDate,
+            updatedAt: laterDate
+        )
+
+        if album.modelContext == nil {
+            context.insert(album)
+        }
+
+        if laterMoment.modelContext == nil {
+            context.insert(laterMoment)
+        }
+
+        try context.save()
+
+        let fetchedAlbum = try #require(context.fetch(FetchDescriptor<Album>()).first)
+        let fetchedMoments = fetchedAlbum.moments.sorted { $0.createdAt < $1.createdAt }
+
+        #expect(fetchedMoments.count == 2)
+        #expect(fetchedMoments.last?.note == "Later")
+        #expect(fetchedMoments.last?.album?.id == fetchedAlbum.id)
+        #expect(fetchedAlbum.updatedAt == laterDate)
+    }
+
     @Test func deletingLastMomentClearsAlbumRatioButKeepsReminder() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
@@ -493,17 +554,51 @@ struct OnceyTests {
         #expect(recorder.removedIdentifiers == [[AlbumReminderService.notificationIdentifier(for: album)]])
     }
 
+    @Test func photosPickerDecoderDownsamplesLargeImages() throws {
+        let sourceImage = makeImage(size: CGSize(width: 3_000, height: 2_000), color: .systemOrange)
+        let imageData = try #require(sourceImage.pngData())
+
+        #expect(sourceImage.size == CGSize(width: 3_000, height: 2_000))
+
+        let decodedImage = try PhotosPickerImageLoader.decodeImage(from: imageData, maximumPixelSize: 1_024)
+
+        #expect(max(decodedImage.size.width, decodedImage.size.height) <= 1_024)
+        #expect(decodedImage.size.width > 0)
+        #expect(decodedImage.size.height > 0)
+    }
+
+    @Test func photosPickerDecoderDoesNotUpscaleSmallerImages() throws {
+        let sourceImage = makeImage(size: CGSize(width: 640, height: 480), color: .systemPurple)
+        let imageData = try #require(sourceImage.pngData())
+
+        #expect(sourceImage.size == CGSize(width: 640, height: 480))
+
+        let decodedImage = try PhotosPickerImageLoader.decodeImage(from: imageData, maximumPixelSize: 1_024)
+
+        #expect(decodedImage.size == sourceImage.size)
+    }
+
 #if canImport(UIKit)
     private func makeImage(color: UIColor, strokeColor: UIColor? = nil) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
+        makeImage(size: CGSize(width: 24, height: 24), color: color, strokeColor: strokeColor)
+    }
+
+    private func makeImage(size: CGSize, color: UIColor, strokeColor: UIColor? = nil) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { context in
             color.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 24, height: 24))
+            context.fill(CGRect(origin: .zero, size: size))
 
             if let strokeColor {
                 strokeColor.setStroke()
                 context.cgContext.setLineWidth(2)
-                context.cgContext.strokeEllipse(in: CGRect(x: 3, y: 3, width: 18, height: 18))
+                let inset = min(size.width, size.height) * 0.125
+                context.cgContext.strokeEllipse(in: CGRect(
+                    x: inset,
+                    y: inset,
+                    width: max(size.width - (inset * 2), 0),
+                    height: max(size.height - (inset * 2), 0)
+                ))
             }
         }
     }

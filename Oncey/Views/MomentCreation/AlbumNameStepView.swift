@@ -10,26 +10,11 @@ struct AlbumNameStepView: View {
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
     @Binding var albumName: String
-    let onNext: () -> Void
-
-    private var trimmedName: String {
-        albumName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                HeroImageView(
-                    image: image,
-                    maxHeight: 500,
-                    namespace: namespace,
-                    geometryID: "creation-hero-image",
-                    usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
-                )
-                .momentCreationTransitionPhase(
-                    phase(for: .heroImage),
-                    reduceMotion: reduceMotion
-                )
+                heroImageSection
 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
                     VStack(spacing: 0) {
@@ -52,18 +37,6 @@ struct AlbumNameStepView: View {
                         phase(for: .albumNameField),
                         reduceMotion: reduceMotion
                     )
-
-                    Button(action: onNext){
-                        Text("Next").frame(maxWidth: .infinity).padding(.vertical, AppTheme.Spacing.s2)
-                    }
-                    .buttonBorderShape(.roundedRectangle(radius: AppTheme.CornerRadius.md))
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.Colors.accent)
-                    .disabled(trimmedName.isEmpty)
-                    .momentCreationTransitionPhase(
-                        phase(for: .primaryButton),
-                        reduceMotion: reduceMotion
-                    )
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
@@ -76,6 +49,31 @@ struct AlbumNameStepView: View {
         for element: MomentCreationTransitionElement
     ) -> MomentCreationTransitionElementPhase {
         elementPhases[element] ?? .hiddenBelow
+    }
+
+    private var heroImageSection: some View {
+        HeroImageView(
+            image: image,
+            maxHeight: 500,
+            namespace: namespace,
+            geometryID: "creation-hero-image",
+            usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
+        )
+        .momentCreationTransitionPhase(
+            phase(for: .heroImage),
+            reduceMotion: reduceMotion
+        )
+        .frame(height: heroReservedHeight, alignment: .top)
+        .clipped()
+    }
+
+    private var heroReservedHeight: CGFloat {
+        switch phase(for: .heroImage) {
+        case .visible:
+            return 500
+        case .hiddenBelow, .hiddenAbove:
+            return 0
+        }
     }
 }
 
@@ -92,8 +90,7 @@ private struct MomentCreationAlbumNameStepPreview: View {
             focus: $focusedField,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.albumName)),
             reduceMotion: false,
-            albumName: $albumName,
-            onNext: {}
+            albumName: $albumName
         )
         .background(AppTheme.Colors.background)
     }

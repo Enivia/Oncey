@@ -10,22 +10,11 @@ struct NoteStepView: View {
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
     @Binding var note: String
-    let onNext: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                HeroImageView(
-                    image: image,
-                    maxHeight: 500,
-                    namespace: namespace,
-                    geometryID: "creation-hero-image",
-                    usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
-                )
-                .momentCreationTransitionPhase(
-                    phase(for: .heroImage),
-                    reduceMotion: reduceMotion
-                )
+                heroImageSection
 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
                     let noteCard = ZStack(alignment: .topLeading) {
@@ -66,17 +55,6 @@ struct NoteStepView: View {
                                 reduceMotion: reduceMotion
                             )
                     }
-
-                    Button(action: onNext){
-                        Text("Next").frame(maxWidth: .infinity).padding(.vertical, AppTheme.Spacing.s2)
-                    }
-                    .buttonBorderShape(.roundedRectangle(radius: AppTheme.CornerRadius.md))
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.Colors.accent)
-                    .momentCreationTransitionPhase(
-                        phase(for: .primaryButton),
-                        reduceMotion: reduceMotion
-                    )
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
@@ -89,6 +67,31 @@ struct NoteStepView: View {
         for element: MomentCreationTransitionElement
     ) -> MomentCreationTransitionElementPhase {
         elementPhases[element] ?? .hiddenBelow
+    }
+
+    private var heroImageSection: some View {
+        HeroImageView(
+            image: image,
+            maxHeight: 500,
+            namespace: namespace,
+            geometryID: "creation-hero-image",
+            usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
+        )
+        .momentCreationTransitionPhase(
+            phase(for: .heroImage),
+            reduceMotion: reduceMotion
+        )
+        .frame(height: heroReservedHeight, alignment: .top)
+        .clipped()
+    }
+
+    private var heroReservedHeight: CGFloat {
+        switch phase(for: .heroImage) {
+        case .visible:
+            return 500
+        case .hiddenBelow, .hiddenAbove:
+            return 0
+        }
     }
 }
 
@@ -105,8 +108,7 @@ private struct MomentCreationNoteStepPreview: View {
             focus: $focusedField,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.note)),
             reduceMotion: false,
-            note: $note,
-            onNext: {}
+            note: $note
         )
         .background(AppTheme.Colors.background)
     }

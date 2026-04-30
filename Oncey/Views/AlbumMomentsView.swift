@@ -83,7 +83,9 @@ struct AlbumMomentsView: View {
         }
         .fullScreenCover(isPresented: $isCreationPresented) {
             NavigationStack {
-                CreationView(mode: .newMoment(album: album)) { _ in }
+                CreationView(mode: .newMoment(album: album)) { album in
+                    focusMostRecentMoment(in: album)
+                }
             }
         }
         .fullScreenCover(item: $pendingShareInput) { input in
@@ -165,6 +167,10 @@ struct AlbumMomentsView: View {
         if !moments.contains(where: { $0.id == currentMomentID }) {
             self.currentMomentID = firstMoment.id
         }
+    }
+
+    private func focusMostRecentMoment(in album: Album) {
+        currentMomentID = AlbumMomentsViewModel(album: album).moments.first?.id
     }
 
     private func deleteMoments(_ moments: [Moment]) {

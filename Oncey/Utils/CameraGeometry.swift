@@ -243,6 +243,8 @@ enum CameraGeometry {
 
 #if canImport(UIKit)
 enum CameraImageCropper {
+    static let maximumOutputLongEdge: CGFloat = 4_096
+
     static func croppedImage(_ image: UIImage, aspect: CameraCaptureAspect) -> UIImage {
         let normalizedImage = normalized(image)
         let cropRect = CameraGeometry.cropRect(for: normalizedImage.size, aspect: aspect)
@@ -270,29 +272,63 @@ enum CameraImageCropper {
     }
 
     private static func croppedImage(_ image: UIImage, cropRect: CGRect) -> UIImage {
-        let normalizedImage = normalized(image)
+        let normalizedCropRect = cropRect.standardized
+        let outputSize = outputSize(for: normalizedCropRect)
+        let coversWholeImage = normalizedCropRect.origin == .zero && normalizedCropRect.size == image.size
 
-        guard cropRect.width > 0,
-              cropRect.height > 0,
-              cropRect.size != normalizedImage.size else {
-            return normalizedImage
+        guard normalizedCropRect.origin.x.isFinite,
+              normalizedCropRect.origin.y.isFinite,
+              outputSize.width > 0,
+              outputSize.height > 0 else {
+            return image
         }
 
+        if coversWholeImage, outputSize == image.size {
+            return image
+        }
+
+        let outputScale = min(
+            outputSize.width / normalizedCropRect.width,
+            outputSize.height / normalizedCropRect.height
+        )
+
         let rendererFormat = UIGraphicsImageRendererFormat.default()
-        rendererFormat.scale = normalizedImage.scale
+        rendererFormat.scale = 1
         rendererFormat.opaque = true
 
-        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: rendererFormat)
+        let renderer = UIGraphicsImageRenderer(size: outputSize, format: rendererFormat)
         return renderer.image { _ in
-            normalizedImage.draw(
+            image.draw(
                 in: CGRect(
-                    x: -cropRect.origin.x,
-                    y: -cropRect.origin.y,
-                    width: normalizedImage.size.width,
-                    height: normalizedImage.size.height
+                    x: -normalizedCropRect.origin.x * outputScale,
+                    y: -normalizedCropRect.origin.y * outputScale,
+                    width: image.size.width * outputScale,
+                    height: image.size.height * outputScale
                 )
             )
         }
+    }
+
+    static func outputSize(
+        for cropRect: CGRect,
+        maximumLongEdge: CGFloat = maximumOutputLongEdge
+    ) -> CGSize {
+        guard cropRect.width.isFinite,
+              cropRect.height.isFinite,
+              cropRect.width > 0,
+              cropRect.height > 0,
+              maximumLongEdge.isFinite,
+              maximumLongEdge > 0 else {
+            return .zero
+        }
+
+        let longEdge = max(cropRect.width, cropRect.height)
+        let outputScale = min(maximumLongEdge / longEdge, 1)
+
+        return CGSize(
+            width: cropRect.width * outputScale,
+            height: cropRect.height * outputScale
+        )
     }
 
     static func normalized(_ image: UIImage) -> UIImage {

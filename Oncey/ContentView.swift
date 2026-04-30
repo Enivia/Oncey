@@ -13,13 +13,13 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("Albums", systemImage: "photo.stack", value: .albums) {
+            Tab("Albums", systemImage: "list.bullet.below.rectangle", value: .albums) {
                 NavigationStack {
                     AlbumsView()
                 }
             }
 
-            Tab("Moments", systemImage: "text.below.photo", value: .moments) {
+            Tab("Moments", systemImage: "photo", value: .moments) {
                 NavigationStack {
                     MomentsView()
                 }
