@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 @testable import Oncey
 
@@ -64,10 +65,81 @@ struct TimelineViewModelTests {
         #expect(viewModel.albumNameText(for: moment) == "Unknown Album")
     }
 
-    private func makeMoment(album: Album, createdAt: Date, updatedAt: Date) -> Moment {
+    @Test func waterfallSectionKeepsYearGroupingAndBalancesShorterColumnFirst() {
+        let viewModel = MomentsViewModel()
+        let calendar = makeCalendar()
+        let yearFormatter = makeFormatter(dateFormat: "yyyy")
+        let album = Album(name: "Trips")
+
+        let latestWide = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 4, day: 27, hour: 12),
+            updatedAt: makeDate(year: 2026, month: 4, day: 27, hour: 12),
+            note: "Latest"
+        )
+        let middleTall = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 4, day: 26, hour: 12),
+            updatedAt: makeDate(year: 2026, month: 4, day: 26, hour: 12)
+        )
+        let olderMedium = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 4, day: 25, hour: 12),
+            updatedAt: makeDate(year: 2026, month: 4, day: 25, hour: 12)
+        )
+
+        let sections = viewModel.sections(
+            from: [olderMedium, middleTall, latestWide],
+            calendar: calendar,
+            yearFormatter: yearFormatter
+        )
+        let waterfallSection = viewModel.waterfallSection(
+            from: sections[0],
+            itemWidth: 100,
+            itemSpacing: 16,
+            imageSizeResolver: { moment in
+                switch moment.id {
+                case latestWide.id:
+                    CGSize(width: 200, height: 100)
+                case middleTall.id:
+                    CGSize(width: 100, height: 200)
+                case olderMedium.id:
+                    CGSize(width: 100, height: 120)
+                default:
+                    nil
+                }
+            }
+        )
+
+        #expect(waterfallSection.title == "2026")
+        #expect(waterfallSection.columns.count == 2)
+        #expect(waterfallSection.columns[0].moments.map(\.id) == [latestWide.id, olderMedium.id])
+        #expect(waterfallSection.columns[1].moments.map(\.id) == [middleTall.id])
+    }
+
+    @Test func estimatedTileHeightFallsBackToDefaultAspectRatioWhenImageSizeIsMissing() {
+        let viewModel = MomentsViewModel()
+        let album = Album(name: "Fallback")
+        let moment = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 4, day: 27, hour: 8),
+            updatedAt: makeDate(year: 2026, month: 4, day: 27, hour: 8)
+        )
+
+        let estimatedHeight = viewModel.estimatedTileHeight(
+            for: moment,
+            itemWidth: 120,
+            imageSizeResolver: { _ in nil }
+        )
+
+        #expect(estimatedHeight == 166)
+    }
+
+    private func makeMoment(album: Album, createdAt: Date, updatedAt: Date, note: String = "") -> Moment {
         Moment(
             album: album,
             photo: "/tmp/\(UUID().uuidString).jpg",
+            note: note,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

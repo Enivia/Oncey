@@ -28,25 +28,21 @@ struct MomentTileView: View {
         VStack(alignment: .leading, spacing: 0) {
             coverImage
 
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
-                HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.s3) {
-                    Text(monthDayText)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                Text(albumNameText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
 
-                    Spacer(minLength: AppTheme.Spacing.s4)
-
-                    Text(albumNameText)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                        .lineLimit(1)
-                }
+                Text(monthDayText)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
 
                 if !trimmedNote.isEmpty {
                     Text(trimmedNote)
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .lineLimit(3)
+                        .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -54,12 +50,12 @@ struct MomentTileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous)
                 .fill(AppTheme.Colors.surface)
                 .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
         .contextMenu {
             if let onEditNote {
                 Button(action: onEditNote) {
@@ -87,34 +83,17 @@ struct MomentTileView: View {
     }
 
     private var coverImage: some View {
-        GeometryReader { geometry in
-            let containerSize = geometry.size
-            let fittedImageSize = AlbumCardCoverLayout.fittedImageSize(
-                for: resolvedCoverSourceSize,
-                in: containerSize
-            )
-
-            ZStack {
-                LocalPhotoView(path: resolvedPhotoPath)
-                    .frame(width: containerSize.width, height: containerSize.height)
-                    .blur(radius: resolvedPhotoPath == nil ? 0 : 20)
-                    .scaleEffect(resolvedPhotoPath == nil ? 1 : 1.06)
-                    .clipped()
-
-                LocalPhotoView(path: resolvedPhotoPath, contentMode: .fit)
-                    .frame(width: fittedImageSize.width, height: fittedImageSize.height)
-            }
-            .frame(width: containerSize.width, height: containerSize.height)
-        }
+        LocalPhotoView(path: resolvedPhotoPath)
         .frame(maxWidth: .infinity)
-        .aspectRatio(4 / 3, contentMode: .fit)
+        .aspectRatio(resolvedCoverAspectRatio, contentMode: .fit)
+        .clipped()
     }
 
     private var resolvedPhotoPath: String? {
         moment.photo.isEmpty ? nil : moment.photo
     }
 
-    private var resolvedCoverSourceSize: CGSize {
+        private var resolvedCoverSourceSize: CGSize {
         guard let resolvedPhotoPath,
               let imageSize = ImageResourceService.imageSize(from: resolvedPhotoPath),
               imageSize.width > 0,
@@ -123,6 +102,15 @@ struct MomentTileView: View {
         }
 
         return imageSize
+    }
+
+    private var resolvedCoverAspectRatio: CGFloat {
+        let sourceSize = resolvedCoverSourceSize
+        guard sourceSize.width > 0, sourceSize.height > 0 else {
+            return 4 / 3
+        }
+
+        return sourceSize.width / sourceSize.height
     }
 }
 

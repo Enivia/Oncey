@@ -64,6 +64,7 @@ struct AlbumMomentsView: View {
         }
         .navigationTitle(viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .sheet(item: $pendingNoteEditorInput) { input in
             NavigationStack {
                 MomentNoteEditorSheet(moment: input.moment)

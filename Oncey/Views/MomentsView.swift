@@ -17,8 +17,6 @@ struct MomentsView: View {
     private let viewModel = MomentsViewModel()
 
     var body: some View {
-        let sections = viewModel.sections(from: moments)
-
         ZStack {
             AppPageBackground(style: .dotted)
 
@@ -31,38 +29,44 @@ struct MomentsView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.s7) {
-                            ForEach(sections) { section in
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
-                                    Text(section.title)
-                                        .font(.title3.weight(.semibold))
-                                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                    GeometryReader { proxy in
+                        let horizontalPadding = AppTheme.Spacing.s6
+                        let columnSpacing = AppTheme.Spacing.s2
+                        let itemSpacing = AppTheme.Spacing.s2
+                        let contentWidth = max(proxy.size.width - horizontalPadding * 2, 0)
+                        let itemWidth = max((contentWidth - columnSpacing) / 2, 0)
+                        let sections = viewModel.waterfallSections(
+                            from: moments,
+                            itemWidth: itemWidth,
+                            itemSpacing: itemSpacing
+                        )
 
-                                    VStack(spacing: AppTheme.Spacing.s5) {
-                                        ForEach(section.moments) { moment in
-                                            MomentTileView(
-                                                moment: moment,
-                                                monthDayText: viewModel.monthDayText(for: moment),
-                                                albumNameText: viewModel.albumNameText(for: moment),
-                                                onEditNote: {
-                                                    pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
-                                                },
-                                                onShare: {
-                                                    pendingShareInput = TimelinePendingShareInput(moment: moment)
-                                                },
-                                                onDelete: {
-                                                    pendingDeleteMoment = moment
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.s7) {
+                                ForEach(sections) { section in
+                                    VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
+                                        Text(section.title)
+                                            .font(.title3.weight(.semibold))
+                                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                                        HStack(alignment: .top, spacing: columnSpacing) {
+                                            ForEach(section.columns) { column in
+                                                LazyVStack(spacing: itemSpacing) {
+                                                    ForEach(column.moments) { moment in
+                                                        momentTile(for: moment)
+                                                    }
                                                 }
-                                            )
+                                                .frame(maxWidth: .infinity, alignment: .top)
+                                            }
                                         }
                                     }
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.vertical, AppTheme.Spacing.s6)
                         }
-                        .padding(.horizontal, AppTheme.Spacing.s6)
-                        .padding(.vertical, AppTheme.Spacing.s6)
                     }
                 }
             }
@@ -101,6 +105,23 @@ struct MomentsView: View {
         } message: {
             Text(errorMessage ?? "Please try again.")
         }
+    }
+
+    private func momentTile(for moment: Moment) -> some View {
+        MomentTileView(
+            moment: moment,
+            monthDayText: viewModel.monthDayText(for: moment),
+            albumNameText: viewModel.albumNameText(for: moment),
+            onEditNote: {
+                pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
+            },
+            onShare: {
+                pendingShareInput = TimelinePendingShareInput(moment: moment)
+            },
+            onDelete: {
+                pendingDeleteMoment = moment
+            }
+        )
     }
 
     private var isPresentingDeleteAlert: Binding<Bool> {
