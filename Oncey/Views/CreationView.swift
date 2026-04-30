@@ -221,7 +221,7 @@ private struct MomentCreationCaptureLayout: Equatable {
     let cropSize: CGSize
 }
 
-struct MomentCreationView: View {
+struct CreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1775,7 +1775,7 @@ private enum MomentCreationPreviewSupport {
     let container = MomentCreationPreviewSupport.makeContainer()
 
     return NavigationStack {
-        MomentCreationView(
+        CreationView(
             mode: .newAlbum,
             reminderClient: MomentCreationPreviewSupport.reminderClient
         )
@@ -1788,7 +1788,7 @@ private enum MomentCreationPreviewSupport {
     let album = MomentCreationPreviewSupport.makeAlbumWithMoment(in: container)
 
     return NavigationStack {
-        MomentCreationView(
+        CreationView(
             mode: .newMoment(album: album),
             reminderClient: MomentCreationPreviewSupport.reminderClient
         )

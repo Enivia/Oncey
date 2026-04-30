@@ -1,27 +1,23 @@
 import SwiftUI
-#if canImport(SwiftData)
 import SwiftData
-#endif
 
 struct MomentsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: [
+        SortDescriptor(\Moment.createdAt, order: .reverse),
+        SortDescriptor(\Moment.updatedAt, order: .reverse)
+    ]) private var moments: [Moment]
 
-    let album: Album
-    @State private var isCreationPresented = false
     @State private var pendingNoteEditorInput: TimelinePendingNoteEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
-    @State private var currentMomentID: UUID?
-    @State private var pendingSingleDeleteMoment: Moment?
-    @State private var errorTitle = "Couldn't load photo"
+    @State private var pendingDeleteMoment: Moment?
     @State private var errorMessage: String?
     @State private var isPresentingError = false
 
-    private var viewModel: MomentsTimelineViewModel {
-        MomentsTimelineViewModel(album: album)
-    }
+    private let viewModel = MomentsViewModel()
 
     var body: some View {
-        let moments = viewModel.moments
+        let sections = viewModel.sections(from: moments)
 
         ZStack {
             AppPageBackground(style: .dotted)
@@ -30,34 +26,43 @@ struct MomentsView: View {
                 if moments.isEmpty {
                     ContentUnavailableView(
                         "No moments yet",
-                        systemImage: "clock.badge.plus",
-                        description: Text("Add a moment from the toolbar.")
+                        systemImage: "clock.badge.questionmark",
+                        description: Text("Moments from every album will appear here once you create them.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    GeometryReader { proxy in
-                        let metrics = MomentTimelinePageMetrics(containerSize: proxy.size)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.s7) {
+                            ForEach(sections) { section in
+                                VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
+                                    Text(section.title)
+                                        .font(.title3.weight(.semibold))
+                                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                        ScrollView(.vertical) {
-                            LazyVStack(spacing: 0) {
-                                ForEach(moments, id: \.id) { moment in
-                                    momentRow(for: moment, metrics: metrics)
-                                        .frame(width: proxy.size.width, height: metrics.pageSize.height)
-                                        .id(moment.id)
+                                    VStack(spacing: AppTheme.Spacing.s5) {
+                                        ForEach(section.moments) { moment in
+                                            MomentTileView(
+                                                moment: moment,
+                                                monthDayText: viewModel.monthDayText(for: moment),
+                                                albumNameText: viewModel.albumNameText(for: moment),
+                                                onEditNote: {
+                                                    pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
+                                                },
+                                                onShare: {
+                                                    pendingShareInput = TimelinePendingShareInput(moment: moment)
+                                                },
+                                                onDelete: {
+                                                    pendingDeleteMoment = moment
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                            .padding(.vertical, metrics.verticalInset)
-                            .scrollTargetLayout()
                         }
-                        .scrollIndicators(.hidden)
-                        .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByFew))
-                        .scrollPosition(id: $currentMomentID, anchor: .center)
-                        .onAppear {
-                            syncCurrentMomentID(with: moments)
-                        }
-                        .onChange(of: moments.map(\.id)) { _, _ in
-                            syncCurrentMomentID(with: moments)
-                        }
+                        .padding(.horizontal, AppTheme.Spacing.s6)
+                        .padding(.vertical, AppTheme.Spacing.s6)
                     }
                 }
             }
@@ -70,112 +75,49 @@ struct MomentsView: View {
             }
             .presentationDetents([.medium])
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isCreationPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("Add moment")
-            }
-        }
-        .fullScreenCover(isPresented: $isCreationPresented) {
-            NavigationStack {
-                MomentCreationView(mode: .newMoment(album: album)) { _ in }
-            }
-        }
         .fullScreenCover(item: $pendingShareInput) { input in
             NavigationStack {
                 MomentShareView(moment: input.moment)
             }
         }
-        .alert("Delete this moment?", isPresented: isPresentingSingleDeleteAlert) {
+        .alert("Delete this moment?", isPresented: isPresentingDeleteAlert) {
             Button("Delete", role: .destructive) {
-                guard let pendingSingleDeleteMoment else {
+                guard let pendingDeleteMoment else {
                     return
                 }
 
-                deleteMoments([pendingSingleDeleteMoment])
-                self.pendingSingleDeleteMoment = nil
+                deleteMoment(pendingDeleteMoment)
+                self.pendingDeleteMoment = nil
             }
 
             Button("Cancel", role: .cancel) {
-                pendingSingleDeleteMoment = nil
+                pendingDeleteMoment = nil
             }
         } message: {
             Text("This action cannot be undone.")
         }
-        .alert(errorTitle, isPresented: $isPresentingError) {
+        .alert("Couldn't delete moment", isPresented: $isPresentingError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "Please try again.")
         }
     }
 
-    private func momentRow(for moment: Moment, metrics: MomentTimelinePageMetrics) -> some View {
-        MomentRowView(
-            moment: moment,
-            timestampText: viewModel.timestampText(for: moment),
-            metrics: metrics,
-            isCurrent: isCurrent(moment),
-            onEditNote: {
-                pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
-            },
-            onShare: {
-                pendingShareInput = TimelinePendingShareInput(moment: moment)
-            },
-            onDelete: {
-                pendingSingleDeleteMoment = moment
-            }
-        )
-    }
-
-    private var isPresentingSingleDeleteAlert: Binding<Bool> {
+    private var isPresentingDeleteAlert: Binding<Bool> {
         Binding(
-            get: { pendingSingleDeleteMoment != nil },
+            get: { pendingDeleteMoment != nil },
             set: { isPresented in
                 if !isPresented {
-                    pendingSingleDeleteMoment = nil
+                    pendingDeleteMoment = nil
                 }
             }
         )
     }
 
-    private func isCurrent(_ moment: Moment) -> Bool {
-        if let currentMomentID {
-            return currentMomentID == moment.id
-        }
-
-        return viewModel.moments.first?.id == moment.id
-    }
-
-    private func syncCurrentMomentID(with moments: [Moment]) {
-        guard let firstMoment = moments.first else {
-            currentMomentID = nil
-            return
-        }
-
-        guard let currentMomentID else {
-            self.currentMomentID = firstMoment.id
-            return
-        }
-
-        if !moments.contains(where: { $0.id == currentMomentID }) {
-            self.currentMomentID = firstMoment.id
-        }
-    }
-
-    private func deleteMoments(_ moments: [Moment]) {
-        guard !moments.isEmpty else {
-            return
-        }
-
+    private func deleteMoment(_ moment: Moment) {
         do {
-            try MomentDeletionService.delete(moments, in: modelContext)
-            syncCurrentMomentID(with: viewModel.moments)
+            try MomentDeletionService.delete([moment], in: modelContext)
         } catch {
-            errorTitle = "Couldn't delete moment"
             errorMessage = error.localizedDescription
             isPresentingError = true
         }
@@ -209,23 +151,32 @@ private struct TimelinePendingNoteEditorInput: Hashable, Identifiable {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Album.self, Moment.self, configurations: config)
 
-    let album = Album(name: "Tokyo Trip 2024")
-    container.mainContext.insert(album)
+    let springAlbum = Album(name: "Spring Walk")
+    let tripAlbum = Album(name: "Kyoto Trip")
+    container.mainContext.insert(springAlbum)
+    container.mainContext.insert(tripAlbum)
 
-    let entries: [(TimeInterval, String)] = [
-        (1_713_715_200, "Neon signs everywhere — the city never sleeps."),
-        (1_713_628_800, "Golden hour at the famous crossing."),
-        (1_713_542_400, "Colourful street fashion and crepe shops.")
-    ]
-    for (ts, note) in entries {
-        container.mainContext.insert(Moment(
-            album: album, photo: "", note: note,
-            createdAt: Date(timeIntervalSince1970: ts)
-        ))
-    }
+    container.mainContext.insert(Moment(
+        album: springAlbum,
+        photo: "",
+        note: "First warm breeze of the year.",
+        createdAt: Date(timeIntervalSince1970: 1_746_057_600)
+    ))
+    container.mainContext.insert(Moment(
+        album: tripAlbum,
+        photo: "",
+        note: "",
+        createdAt: Date(timeIntervalSince1970: 1_713_715_200)
+    ))
+    container.mainContext.insert(Moment(
+        album: tripAlbum,
+        photo: "",
+        note: "Lanterns glowing after sunset.",
+        createdAt: Date(timeIntervalSince1970: 1_702_166_400)
+    ))
 
     return NavigationStack {
-        MomentsView(album: album)
+        MomentsView()
     }
     .modelContainer(container)
 }

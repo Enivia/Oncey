@@ -9,11 +9,28 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @State private var selectedTab: HomeTab = .albums
+
     var body: some View {
-        NavigationStack {
-            AlbumsView()
+        TabView(selection: $selectedTab) {
+            Tab("Albums", systemImage: "photo.stack", value: .albums) {
+                NavigationStack {
+                    AlbumsView()
+                }
+            }
+
+            Tab("Moments", systemImage: "text.below.photo", value: .moments) {
+                NavigationStack {
+                    MomentsView()
+                }
+            }
         }
     }
+}
+
+private enum HomeTab {
+    case albums
+    case moments
 }
 
 #Preview {

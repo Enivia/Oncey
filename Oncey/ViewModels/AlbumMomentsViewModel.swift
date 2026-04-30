@@ -1,11 +1,11 @@
 //
-//  MomentsTimelineViewModel.swift
+//  AlbumMomentsViewModel.swift
 //  Oncey
 //
 
 import Foundation
 
-struct MomentsTimelineViewModel {
+struct AlbumMomentsViewModel {
     let album: Album
 
     var title: String {

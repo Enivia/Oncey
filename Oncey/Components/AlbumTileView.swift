@@ -1,11 +1,11 @@
 //
-//  AlbumCardView.swift
+//  AlbumTileView.swift
 //  Oncey
 //
 
 import SwiftUI
 
-struct AlbumCardView: View {
+struct AlbumTileView: View {
     let album: Album
     let coverPhotoPath: String?
     let albumCreatedText: String
@@ -217,7 +217,7 @@ private enum AlbumTimelineNodeStyle {
         return album
     }()
 
-    AlbumCardView(
+    AlbumTileView(
         album: album,
         coverPhotoPath: nil,
         albumCreatedText: "Apr 13, 2026",

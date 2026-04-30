@@ -1,11 +1,11 @@
 //
-//  MomentTimelineRowView.swift
+//  MomentTileView.swift
 //  Oncey
 //
 
 import SwiftUI
 
-struct MomentRowView: View {
+struct AlbumMomentTileView: View {
     let moment: Moment
     let timestampText: String
     let metrics: MomentTimelinePageMetrics
@@ -126,7 +126,7 @@ struct MomentRowView: View {
     let album = Album(name: "Timeline Preview")
     let moment = Moment(album: album, photo: "", note: "Today is such a good day!")
 
-    MomentRowView(
+    AlbumMomentTileView(
         moment: moment,
         timestampText: "Apr 18, 2026 at 7:05 PM",
         metrics: MomentTimelinePageMetrics(containerSize: CGSize(width: 360, height: 780)),

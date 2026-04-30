@@ -43,9 +43,9 @@ struct AlbumsView: View {
 
                             ForEach(albums) { album in
                                 NavigationLink {
-                                    MomentsView(album: album)
+                                    AlbumMomentsView(album: album)
                                 } label: {
-                                    AlbumCardView(
+                                    AlbumTileView(
                                         album: album,
                                         coverPhotoPath: viewModel.coverPhotoPath(for: album),
                                         albumCreatedText: viewModel.albumCreatedText(for: album),
@@ -83,12 +83,12 @@ struct AlbumsView: View {
         }
         .navigationDestination(isPresented: timelineNavigationBinding) {
             if let pendingTimelineAlbum {
-                MomentsView(album: pendingTimelineAlbum)
+                AlbumMomentsView(album: pendingTimelineAlbum)
             }
         }
         .fullScreenCover(isPresented: $isCreationPresented) {
             NavigationStack {
-                MomentCreationView(mode: .newAlbum) { album in
+                CreationView(mode: .newAlbum) { album in
                     pendingTimelineAlbumID = album.id
                 }
             }
@@ -96,7 +96,7 @@ struct AlbumsView: View {
         .fullScreenCover(item: $reminderCreationTarget) { target in
             if let album = albums.first(where: { $0.id == target.id }) {
                 NavigationStack {
-                    MomentCreationView(mode: .newMoment(album: album)) { album in
+                    CreationView(mode: .newMoment(album: album)) { album in
                         pendingTimelineAlbumID = album.id
                     }
                 }
