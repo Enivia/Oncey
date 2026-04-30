@@ -6,7 +6,7 @@ struct MomentTimelinePageMetrics {
     var pageSize: CGSize {
         CGSize(
             width: containerSize.width,
-            height: max(0, containerSize.height * AppTheme.Layout.timelinePageHeightRatio)
+            height: max(0, containerSize.height * AppTheme.Layout.momentsPageHeightRatio)
         )
     }
 
@@ -15,19 +15,19 @@ struct MomentTimelinePageMetrics {
     }
 
     var horizontalPadding: CGFloat {
-        AppTheme.Layout.timelinePageHorizontalPadding
+        AppTheme.Layout.momentsPageHorizontalPadding
     }
 
     var contentSpacing: CGFloat {
-        AppTheme.Layout.timelinePageContentSpacing
+        AppTheme.Layout.momentsPageContentSpacing
     }
 
     var timestampHeight: CGFloat {
-        AppTheme.Layout.timelineTimestampHeight
+        AppTheme.Layout.momentsTimestampHeight
     }
 
     var noteHeight: CGFloat {
-        AppTheme.Layout.timelineNoteHeight
+        AppTheme.Layout.momentsNoteHeight
     }
 
     var photoMaxSize: CGSize {

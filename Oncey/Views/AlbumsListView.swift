@@ -43,7 +43,7 @@ struct AlbumsListView: View {
 
                             ForEach(albums) { album in
                                 NavigationLink {
-                                    MomentsTimelineView(album: album)
+                                    MomentsView(album: album)
                                 } label: {
                                     AlbumCardView(
                                         album: album,
@@ -83,7 +83,7 @@ struct AlbumsListView: View {
         }
         .navigationDestination(isPresented: timelineNavigationBinding) {
             if let pendingTimelineAlbum {
-                MomentsTimelineView(album: pendingTimelineAlbum)
+                MomentsView(album: pendingTimelineAlbum)
             }
         }
         .fullScreenCover(isPresented: $isCreationPresented) {

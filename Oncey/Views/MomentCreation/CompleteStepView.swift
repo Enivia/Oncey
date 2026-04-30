@@ -7,7 +7,7 @@ struct CompleteStepView: View {
     let namespace: Namespace.ID
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
-    let onTimeline: () -> Void
+    let onMoments: () -> Void
 
     var body: some View {
         ScrollView {
@@ -43,7 +43,7 @@ struct CompleteStepView: View {
                     reduceMotion: reduceMotion
                 )
 
-                Button(action: onTimeline){
+                Button(action: onMoments){
                     Text("Timeline").frame(maxWidth: .infinity).padding(.vertical, AppTheme.Spacing.s2)
                 }
                 .buttonBorderShape(.roundedRectangle(radius: AppTheme.CornerRadius.md))
@@ -87,7 +87,7 @@ private struct MomentCreationCompleteStepPreview: View {
             namespace: previewNamespace,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.complete)),
             reduceMotion: false,
-            onTimeline: {}
+            onMoments: {}
         )
         .background(AppTheme.Colors.background)
     }

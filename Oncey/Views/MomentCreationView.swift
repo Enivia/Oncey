@@ -491,7 +491,7 @@ struct MomentCreationView: View {
                     namespace: creationAnimation,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
-                    onTimeline: closeAndRouteToTimeline
+                    onMoments: closeAndRouteToMoments
                 )
             )
         }
@@ -1271,7 +1271,7 @@ struct MomentCreationView: View {
         }
     }
 
-    private func closeAndRouteToTimeline() {
+    private func closeAndRouteToMoments() {
         guard let album = createdAlbum ?? mode.album else {
             dismiss()
             return

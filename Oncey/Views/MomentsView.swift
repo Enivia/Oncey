@@ -3,7 +3,7 @@ import SwiftUI
 import SwiftData
 #endif
 
-struct MomentsTimelineView: View {
+struct MomentsView: View {
     @Environment(\.modelContext) private var modelContext
 
     let album: Album
@@ -41,7 +41,7 @@ struct MomentsTimelineView: View {
                         ScrollView(.vertical) {
                             LazyVStack(spacing: 0) {
                                 ForEach(moments, id: \.id) { moment in
-                                    timelineRow(for: moment, metrics: metrics)
+                                    momentRow(for: moment, metrics: metrics)
                                         .frame(width: proxy.size.width, height: metrics.pageSize.height)
                                         .id(moment.id)
                                 }
@@ -113,8 +113,8 @@ struct MomentsTimelineView: View {
         }
     }
 
-    private func timelineRow(for moment: Moment, metrics: MomentTimelinePageMetrics) -> some View {
-        MomentTimelineRowView(
+    private func momentRow(for moment: Moment, metrics: MomentTimelinePageMetrics) -> some View {
+        MomentRowView(
             moment: moment,
             timestampText: viewModel.timestampText(for: moment),
             metrics: metrics,
@@ -225,7 +225,7 @@ private struct TimelinePendingNoteEditorInput: Hashable, Identifiable {
     }
 
     return NavigationStack {
-        MomentsTimelineView(album: album)
+        MomentsView(album: album)
     }
     .modelContainer(container)
 }

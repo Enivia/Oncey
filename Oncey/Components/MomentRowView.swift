@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-struct MomentTimelineRowView: View {
+struct MomentRowView: View {
     let moment: Moment
     let timestampText: String
     let metrics: MomentTimelinePageMetrics
@@ -81,7 +81,7 @@ struct MomentTimelineRowView: View {
             Circle()
                 .fill(isCurrent ? AppTheme.Colors.accent : AppTheme.Colors.accentSoft)
                 .stroke(AppTheme.Colors.surface, lineWidth: 2)
-                .frame(width: AppTheme.Layout.timelineDotSize, height: AppTheme.Layout.timelineDotSize)
+                .frame(width: AppTheme.Layout.momentsDotSize, height: AppTheme.Layout.momentsDotSize)
 
             Text(timestampText)
                 .font(.subheadline.weight(isCurrent ? .semibold : .medium))
@@ -126,7 +126,7 @@ struct MomentTimelineRowView: View {
     let album = Album(name: "Timeline Preview")
     let moment = Moment(album: album, photo: "", note: "Today is such a good day!")
 
-    MomentTimelineRowView(
+    MomentRowView(
         moment: moment,
         timestampText: "Apr 18, 2026 at 7:05 PM",
         metrics: MomentTimelinePageMetrics(containerSize: CGSize(width: 360, height: 780)),
