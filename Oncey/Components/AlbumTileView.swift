@@ -8,51 +8,63 @@ import SwiftUI
 struct AlbumTileView: View {
     let album: Album
     let coverPhotoPath: String?
-    let albumCreatedText: String
-    let momentCountText: String
     let reminderCountdownText: String?
-    let displayedMomentNodeCount: Int
-    let showsReminderNode: Bool
+    let momentCountText: String
+
+    private static let layerTransforms: [CardLayerTransform] = [
+        .init(x: -10, y: 10, angle: -1.8),
+        .init(x: 8, y: 8, angle: 1.4),
+        .init(x: -5, y: 3, angle: -1.0),
+        .init(x: 6, y: 8, angle: 2.1),
+        .init(x: -8, y: 6, angle: -1.5),
+    ]
+
+    private var displayedLayerCount: Int {
+        max(1, min(album.moments.count, 5))
+    }
+
+    private var backdropTransforms: [CardLayerTransform] {
+        Array(Self.layerTransforms.prefix(max(0, displayedLayerCount - 1)))
+    }
+
+    private var backdropBottomInset: CGFloat {
+        backdropTransforms.map(\.y).max() ?? 0
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            coverImage
+        ZStack(alignment: .top) {
+            ForEach(Array(backdropTransforms.enumerated().reversed()), id: \.offset) { index, transform in
+                Rectangle()
+                    .fill(AppTheme.Colors.surface.opacity(0.78 - Double(index) * 0.08))
+                    .border(AppTheme.Colors.border.opacity(0.75))
+                    .rotationEffect(.degrees(transform.angle))
+                    .offset(x: transform.x, y: transform.y)
+            }
 
-            VStack(alignment: .leading, spacing: 0){
-                Text(album.name)
-                    .font(.title3.weight(.semibold))
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.s4) {
+                coverImage
 
-                AlbumTimelineSummaryView(
-                    momentNodeCount: displayedMomentNodeCount,
-                    showsReminderNode: showsReminderNode
-                )
-                .padding(.top, AppTheme.Spacing.s4)
-
-                HStack(alignment: .center) {
-                    Text(albumCreatedText)
-                        .font(.footnote.weight(.light))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
+                    Text(album.name)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
                         .lineLimit(1)
-                    
-                    Spacer(minLength: AppTheme.Spacing.s4)
 
                     Text(momentCountText)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                         .lineLimit(1)
                 }
-                .padding(.top, AppTheme.Spacing.s2)
             }
-            .padding(AppTheme.Spacing.s5)
+            .padding(AppTheme.Spacing.s6)
+            .background {
+                Rectangle()
+                    .fill(AppTheme.Colors.surface)
+                    .border(AppTheme.Colors.border)
+                    .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.cardRadius, y: AppTheme.Shadow.cardYOffset)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                .fill(AppTheme.Colors.surface)
-                .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
+        .padding(.bottom, AppTheme.Spacing.s6 + backdropBottomInset)
         .overlay(alignment: .topTrailing) {
             if let reminderCountdownText {
                 Text(reminderCountdownText)
@@ -61,8 +73,8 @@ struct AlbumTileView: View {
                     .padding(.horizontal, AppTheme.Spacing.s3)
                     .padding(.vertical, AppTheme.Spacing.s2)
                     .glassEffect()
-                    .padding(.trailing, 12)
-                    .padding(.top, 12)
+                    .padding(.trailing, AppTheme.Spacing.s8)
+                    .padding(.top, AppTheme.Spacing.s8)
             }
         }
         .accessibilityElement(children: .combine)
@@ -104,100 +116,10 @@ struct AlbumTileView: View {
     }
 }
 
-private struct AlbumTimelineSummaryView: View {
-    let momentNodeCount: Int
-    let showsReminderNode: Bool
-
-    private let maxNodeSlotCount = 7
-
-    private var nodeStyles: [AlbumTimelineNodeStyle] {
-        let momentNodes = Array(repeating: AlbumTimelineNodeStyle.moment, count: momentNodeCount)
-        if showsReminderNode {
-            return momentNodes + [.reminder]
-        }
-
-        return momentNodes
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let lineY = geometry.size.height / 2
-            let nodeDiameter: CGFloat = 12
-            let nodeRadius = nodeDiameter / 2
-            let lineStartX = nodeRadius
-            let lineEndX = max(lineStartX, geometry.size.width - nodeRadius)
-            let displayedNodeStyles = Array(nodeStyles.prefix(maxNodeSlotCount))
-            let stepCount = max(maxNodeSlotCount - 1, 1)
-            let usableWidth = max(0, lineEndX - lineStartX - 32)
-
-            ZStack {
-                Path { path in
-                    path.move(to: CGPoint(x: lineStartX, y: lineY))
-                    path.addLine(to: CGPoint(x: lineEndX, y: lineY))
-                }
-                .stroke(
-                    AppTheme.Colors.accent ,
-                    style: StrokeStyle(lineWidth: 0.6, lineCap: .round, dash: [4, 4])
-                )
-
-                ForEach(Array(displayedNodeStyles.enumerated()), id: \.offset) { index, style in
-                    let progress = CGFloat(index) / CGFloat(stepCount)
-                    AlbumTimelineNodeView(style: style)
-                        .position(
-                            x: lineStartX + usableWidth * progress,
-                            y: lineY
-                        )
-                }
-            }
-        }
-        .frame(height: 16)
-    }
-}
-
-private struct AlbumTimelineNodeView: View {
-    let style: AlbumTimelineNodeStyle
-
-    var body: some View {
-        Circle()
-            .fill(fillColor)
-            .frame(width: 6, height: 6)
-            .overlay {
-                Circle()
-                    .stroke(strokeColor, style: strokeStyle)
-            }
-    }
-
-    private var fillColor: Color {
-        switch style {
-        case .moment:
-            return AppTheme.Colors.accentSoft
-        case .reminder:
-            return AppTheme.Colors.surface
-        }
-    }
-
-    private var strokeColor: Color {
-        switch style {
-        case .moment:
-            return AppTheme.Colors.accent
-        case .reminder:
-            return AppTheme.Colors.accent
-        }
-    }
-
-    private var strokeStyle: StrokeStyle {
-        switch style {
-        case .moment:
-            return StrokeStyle(lineWidth: 1)
-        case .reminder:
-            return StrokeStyle(lineWidth: 1, dash: [3, 1.5])
-        }
-    }
-}
-
-private enum AlbumTimelineNodeStyle {
-    case moment
-    case reminder
+private struct CardLayerTransform {
+    let x: CGFloat
+    let y: CGFloat
+    let angle: Double
 }
 
 #Preview {
@@ -205,20 +127,14 @@ private enum AlbumTimelineNodeStyle {
         let album = Album(name: "Weekend Escape")
         let _ = Moment(album: album, photo: "", createdAt: .now.addingTimeInterval(-86_400 * 12))
         let _ = Moment(album: album, photo: "", createdAt: .now.addingTimeInterval(-86_400 * 2))
-        album.remindValue = 1
-        album.remindUnit = .week
-        album.remindAt = .now.addingTimeInterval(86_400 * 4)
         return album
     }()
 
     AlbumTileView(
         album: album,
         coverPhotoPath: nil,
-        albumCreatedText: "Apr 13, 2026",
-        momentCountText: "2 Moments",
         reminderCountdownText: "4 days later",
-        displayedMomentNodeCount: 2,
-        showsReminderNode: true
+        momentCountText: "2 Moments",
     )
         .padding()
         .background(AppTheme.Colors.background)

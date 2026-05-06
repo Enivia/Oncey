@@ -106,8 +106,6 @@ struct AlbumsViewModelTests {
             ]
         )
 
-        #expect(viewModel.displayedMomentNodeCount(for: album) == 5)
-        #expect(viewModel.showsReminderNode(for: album))
         #expect(viewModel.reminderBannerText(for: album, referenceDate: referenceDate, calendar: calendar) == "4 days remaining, ready to go back and take a photo?")
     }
 

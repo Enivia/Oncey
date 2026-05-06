@@ -124,10 +124,6 @@ final class AlbumsViewModel {
         return min(album.moments.count, limit)
     }
 
-    func showsReminderNode(for album: Album) -> Bool {
-        album.hasReminder
-    }
-
     private func relativeReminderText(
         to targetDate: Date,
         referenceDate: Date,

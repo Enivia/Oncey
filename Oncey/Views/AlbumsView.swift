@@ -48,11 +48,8 @@ struct AlbumsView: View {
                                     AlbumTileView(
                                         album: album,
                                         coverPhotoPath: viewModel.coverPhotoPath(for: album),
-                                        albumCreatedText: viewModel.albumCreatedText(for: album),
-                                        momentCountText: viewModel.momentCountText(for: album),
                                         reminderCountdownText: viewModel.reminderCountdownText(for: album),
-                                        displayedMomentNodeCount: viewModel.displayedMomentNodeCount(for: album),
-                                        showsReminderNode: viewModel.showsReminderNode(for: album)
+                                        momentCountText: viewModel.momentCountText(for: album)
                                     )
                                 }
                                 .buttonStyle(.plain)
