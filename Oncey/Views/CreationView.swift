@@ -427,15 +427,8 @@ struct CreationView: View {
 
         switch step {
         case .albumName:
-            guard let workflowImage else {
-                return AnyView(ProgressView())
-            }
-
             return AnyView(
                 AlbumNameStepView(
-                    image: workflowImage,
-                    namespace: creationAnimation,
-                    usesHeroMatchedGeometry: usesWorkflowHeroMatchedGeometry,
                     focus: $focusedField,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
@@ -443,15 +436,9 @@ struct CreationView: View {
                 )
             )
         case .note:
-            guard let workflowImage else {
-                return AnyView(ProgressView())
-            }
-
             return AnyView(
                 NoteStepView(
-                    image: workflowImage,
                     namespace: creationAnimation,
-                    usesHeroMatchedGeometry: usesWorkflowHeroMatchedGeometry,
                     focus: $focusedField,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
@@ -486,11 +473,9 @@ struct CreationView: View {
             return AnyView(
                 CompleteStepView(
                     moment: createdMoment,
-                    reminderMessage: completionReminderMessage,
                     namespace: creationAnimation,
                     elementPhases: elementPhases,
                     reduceMotion: reduceMotion,
-                    onMoments: closeAndRouteToMoments
                 )
             )
         }
@@ -612,7 +597,7 @@ struct CreationView: View {
                     Button {
                         goForwardFromWorkflowToolbar()
                     } label: {
-                        Image(systemName: "checkmark")
+                        Image(systemName: "chevron.forward")
                     }
                     .disabled(isWorkflowToolbarConfirmationDisabled)
                     .accessibilityLabel("Next")
@@ -629,6 +614,15 @@ struct CreationView: View {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Share")
+                }
+                
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button (action: closeAndRouteToMoments) {
+                        Image(systemName: "photo.stack")
+                    }
+                    .accessibilityLabel("Moments")
                 }
             }
         }
@@ -885,18 +879,6 @@ struct CreationView: View {
         default:
             return true
         }
-    }
-
-    private var usesWorkflowHeroMatchedGeometry: Bool {
-        captureHeroMatchedGeometryEnabled
-    }
-
-    private var completionReminderMessage: String? {
-        guard let createdAlbum, let remindAt = createdAlbum.remindAt else {
-            return nil
-        }
-
-        return "Deal. I’ll remind you to come back on \(AppDateFormatters.momentTimestamp.string(from: remindAt))"
     }
 
     private func advanceFromAlbumName() {

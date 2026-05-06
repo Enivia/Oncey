@@ -1,11 +1,7 @@
 #if os(iOS)
 import SwiftUI
-import UIKit
 
 struct AlbumNameStepView: View {
-    let image: UIImage
-    let namespace: Namespace.ID
-    let usesHeroMatchedGeometry: Bool
     let focus: FocusState<MomentCreationFocusField?>.Binding
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
@@ -14,8 +10,6 @@ struct AlbumNameStepView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                heroImageSection
-
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
                     VStack(spacing: 0) {
                         TextField("Name this moment", text: $albumName)
@@ -50,43 +44,14 @@ struct AlbumNameStepView: View {
     ) -> MomentCreationTransitionElementPhase {
         elementPhases[element] ?? .hiddenBelow
     }
-
-    private var heroImageSection: some View {
-        HeroImageView(
-            image: image,
-            maxHeight: 500,
-            namespace: namespace,
-            geometryID: "creation-hero-image",
-            usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
-        )
-        .momentCreationTransitionPhase(
-            phase(for: .heroImage),
-            reduceMotion: reduceMotion
-        )
-        .frame(height: heroReservedHeight, alignment: .top)
-        .clipped()
-    }
-
-    private var heroReservedHeight: CGFloat {
-        switch phase(for: .heroImage) {
-        case .visible:
-            return 500
-        case .hiddenBelow, .hiddenAbove:
-            return 0
-        }
-    }
 }
 
 private struct MomentCreationAlbumNameStepPreview: View {
     @State private var albumName = "Name"
     @FocusState private var focusedField: MomentCreationFocusField?
-    @Namespace private var previewNamespace
 
     var body: some View {
         AlbumNameStepView(
-            image: UIImage(systemName: "photo") ?? UIImage(),
-            namespace: previewNamespace,
-            usesHeroMatchedGeometry: true,
             focus: $focusedField,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.albumName)),
             reduceMotion: false,

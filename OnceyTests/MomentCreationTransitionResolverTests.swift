@@ -24,7 +24,7 @@ struct MomentCreationTransitionResolverTests {
         #expect(laterMomentPlan.containerTransition == .none)
     }
 
-    @Test func captureEntryStagesWaitForHeroTransitionBeforeShowingFieldAndButton() {
+    @Test func captureEntryStagesShowFieldImmediatelyAfterBackgroundTransition() {
         let albumNamePlan = TransitionResolver.resolve(
             from: .capture,
             to: .workflow(.albumName),
@@ -50,20 +50,12 @@ struct MomentCreationTransitionResolverTests {
                 startMilliseconds: 500,
                 durationMilliseconds: 300,
                 events: [
-                    .init(element: .heroImage, action: .enter)
-                ]
-            ),
-            .init(
-                anchor: .routeStart,
-                startMilliseconds: 600,
-                durationMilliseconds: 300,
-                events: [
                     .init(element: .albumNameField, action: .enter)
                 ]
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 700,
+                startMilliseconds: 600,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .primaryButton, action: .enter)
@@ -85,20 +77,12 @@ struct MomentCreationTransitionResolverTests {
                 startMilliseconds: 500,
                 durationMilliseconds: 300,
                 events: [
-                    .init(element: .heroImage, action: .enter)
-                ]
-            ),
-            .init(
-                anchor: .routeStart,
-                startMilliseconds: 600,
-                durationMilliseconds: 300,
-                events: [
                     .init(element: .noteCard, action: .enter)
                 ]
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 700,
+                startMilliseconds: 600,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .primaryButton, action: .enter)
@@ -107,7 +91,7 @@ struct MomentCreationTransitionResolverTests {
         ])
     }
 
-    @Test func captureEntryStartsWithHiddenHeroAndControls() {
+    @Test func captureEntryStartsWithHiddenInputAndControls() {
         let albumNamePhases = TransitionStateResolver.initialPhases(
             for: .workflow(.albumName),
             route: .captureToAlbumName
@@ -117,16 +101,22 @@ struct MomentCreationTransitionResolverTests {
             route: .captureToNote
         )
 
-        #expect(albumNamePhases[.heroImage] == .hiddenBelow)
         #expect(albumNamePhases[.albumNameField] == .hiddenBelow)
         #expect(albumNamePhases[.primaryButton] == .hiddenBelow)
 
-        #expect(notePhases[.heroImage] == .hiddenBelow)
         #expect(notePhases[.noteCard] == .hiddenBelow)
         #expect(notePhases[.primaryButton] == .hiddenBelow)
     }
 
-    @Test func captureEntryFocusWaitsUntilWholeEntranceFinishes() {
+    @Test func workflowSettledPhasesNoLongerIncludeHeroImage() {
+        let albumNamePhases = TransitionStateResolver.settledPhases(for: .workflow(.albumName))
+        let notePhases = TransitionStateResolver.settledPhases(for: .workflow(.note))
+
+        #expect(albumNamePhases[.heroImage] == nil)
+        #expect(notePhases[.heroImage] == nil)
+    }
+
+    @Test func captureEntryFocusWaitsUntilFieldEntranceFinishes() {
         let albumNamePlan = TransitionResolver.resolve(
             from: .capture,
             to: .workflow(.albumName),
@@ -142,17 +132,17 @@ struct MomentCreationTransitionResolverTests {
             TransitionStateResolver.focusDelayMilliseconds(
                 for: .workflow(.albumName),
                 plan: albumNamePlan
-            ) == 1050
+            ) == 850
         )
         #expect(
             TransitionStateResolver.focusDelayMilliseconds(
                 for: .workflow(.note),
                 plan: notePlan
-            ) == 1050
+            ) == 850
         )
     }
 
-    @Test func albumNameToNoteFocusWaitsUntilWholeTransitionFinishes() {
+    @Test func albumNameToNoteFocusWaitsUntilNoteCardEntranceFinishes() {
         let plan = TransitionResolver.resolve(
             from: .workflow(.albumName),
             to: .workflow(.note),
@@ -163,7 +153,7 @@ struct MomentCreationTransitionResolverTests {
             TransitionStateResolver.focusDelayMilliseconds(
                 for: .workflow(.note),
                 plan: plan
-            ) == 1450
+            ) == 1050
         )
     }
 
@@ -221,18 +211,10 @@ struct MomentCreationTransitionResolverTests {
 
         #expect(plan.route == .noteToReminder)
         #expect(plan.kind == .staged)
-        #expect(plan.stages.prefix(3) == [
+        #expect(plan.stages.prefix(2) == [
             .init(
                 anchor: .routeStart,
                 startMilliseconds: 0,
-                durationMilliseconds: 300,
-                events: [
-                    .init(element: .heroImage, action: .exit)
-                ]
-            ),
-            .init(
-                anchor: .routeStart,
-                startMilliseconds: 400,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .noteCard, action: .exit)
@@ -240,7 +222,7 @@ struct MomentCreationTransitionResolverTests {
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 800,
+                startMilliseconds: 400,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .primaryButton, action: .exit)
@@ -330,7 +312,7 @@ struct MomentCreationTransitionResolverTests {
         #expect(Array(plan.stages.suffix(5)) == [
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 1100,
+                startMilliseconds: 700,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .reminderTitle, action: .enter)
@@ -338,7 +320,7 @@ struct MomentCreationTransitionResolverTests {
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 1150,
+                startMilliseconds: 750,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .reminderPicker, action: .enter)
@@ -346,7 +328,7 @@ struct MomentCreationTransitionResolverTests {
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 1200,
+                startMilliseconds: 800,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .reminderDescription, action: .enter)
@@ -354,7 +336,7 @@ struct MomentCreationTransitionResolverTests {
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 1250,
+                startMilliseconds: 850,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .reminderPrimaryButton, action: .enter)
@@ -362,7 +344,7 @@ struct MomentCreationTransitionResolverTests {
             ),
             .init(
                 anchor: .routeStart,
-                startMilliseconds: 1300,
+                startMilliseconds: 900,
                 durationMilliseconds: 300,
                 events: [
                     .init(element: .reminderSecondaryButton, action: .enter)

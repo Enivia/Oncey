@@ -3,11 +3,9 @@ import SwiftUI
 
 struct CompleteStepView: View {
     let moment: Moment
-    let reminderMessage: String?
     let namespace: Namespace.ID
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
-    let onMoments: () -> Void
 
     var body: some View {
         ScrollView {
@@ -26,33 +24,6 @@ struct CompleteStepView: View {
                             reduceMotion: reduceMotion
                         )
                 }
-
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
-                    Text("Moment captured")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                    if let reminderMessage {
-                        Text(reminderMessage)
-                            .font(.body)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .momentCreationTransitionPhase(
-                    phase(for: .completeTimeline),
-                    reduceMotion: reduceMotion
-                )
-
-                Button(action: onMoments){
-                    Text("Timeline").frame(maxWidth: .infinity).padding(.vertical, AppTheme.Spacing.s2)
-                }
-                .buttonBorderShape(.roundedRectangle(radius: AppTheme.CornerRadius.md))
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.Colors.accent)
-                .momentCreationTransitionPhase(
-                    phase(for: .completeTimeline),
-                    reduceMotion: reduceMotion
-                )
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
             .padding(.top, AppTheme.Spacing.s2)
@@ -83,11 +54,9 @@ private struct MomentCreationCompleteStepPreview: View {
     var body: some View {
         CompleteStepView(
             moment: moment,
-            reminderMessage: "Deal. I’ll remind you to come back on \(AppDateFormatters.momentTimestamp.string(from: Date.now.addingTimeInterval(60 * 60 * 24 * 90)))",
             namespace: previewNamespace,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.complete)),
             reduceMotion: false,
-            onMoments: {}
         )
         .background(AppTheme.Colors.background)
     }

@@ -17,11 +17,11 @@ enum TransitionStateResolver {
             return [:]
         case .workflow(.albumName):
             return phases(
-                visible: [.heroImage, .albumNameField, .primaryButton]
+                visible: [.albumNameField, .primaryButton]
             )
         case .workflow(.note):
             return phases(
-                visible: [.heroImage, .noteCard, .primaryButton]
+                visible: [.noteCard, .primaryButton]
             )
         case .workflow(.reminder):
             return phases(
@@ -45,19 +45,16 @@ enum TransitionStateResolver {
         switch route {
         case .captureToAlbumName:
             return [
-                .heroImage: .hiddenBelow,
                 .albumNameField: .hiddenBelow,
                 .primaryButton: .hiddenBelow
             ]
         case .captureToNote:
             return [
-                .heroImage: .hiddenBelow,
                 .noteCard: .hiddenBelow,
                 .primaryButton: .hiddenBelow
             ]
         case .albumNameToNote:
             return [
-                .heroImage: .visible,
                 .noteCard: .hiddenBelow,
                 .primaryButton: .hiddenBelow
             ]
@@ -94,9 +91,8 @@ enum TransitionStateResolver {
         }
 
         let fieldEntranceCompletion = absoluteStart(for: stage, in: plan) + stage.durationMilliseconds
-        let transitionCompletion = totalDurationMilliseconds(for: plan)
 
-        return max(fieldEntranceCompletion, transitionCompletion) + focusSettleDelayMilliseconds
+        return fieldEntranceCompletion + focusSettleDelayMilliseconds
     }
 
     static func focusField(for step: MomentCreationScreenStep) -> MomentCreationFocusField? {
@@ -125,12 +121,6 @@ enum TransitionStateResolver {
         visible elements: [MomentCreationTransitionElement]
     ) -> MomentCreationTransitionElementPhases {
         Dictionary(uniqueKeysWithValues: elements.map { ($0, .visible) })
-    }
-
-    private static func totalDurationMilliseconds(
-        for plan: MomentCreationTransitionPlan
-    ) -> Int {
-        max(plan.stages.map { absoluteStart(for: $0, in: plan) + $0.durationMilliseconds }.max() ?? 0, 0)
     }
 
     private static func absoluteStart(

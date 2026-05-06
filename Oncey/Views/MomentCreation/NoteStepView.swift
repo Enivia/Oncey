@@ -1,11 +1,8 @@
 #if os(iOS)
 import SwiftUI
-import UIKit
 
 struct NoteStepView: View {
-    let image: UIImage
     let namespace: Namespace.ID
-    let usesHeroMatchedGeometry: Bool
     let focus: FocusState<MomentCreationFocusField?>.Binding
     let elementPhases: MomentCreationTransitionElementPhases
     let reduceMotion: Bool
@@ -14,8 +11,6 @@ struct NoteStepView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.s6) {
-                heroImageSection
-
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.s3) {
                     let noteCard = ZStack(alignment: .topLeading) {
                         TextEditor(text: $note)
@@ -68,31 +63,6 @@ struct NoteStepView: View {
     ) -> MomentCreationTransitionElementPhase {
         elementPhases[element] ?? .hiddenBelow
     }
-
-    private var heroImageSection: some View {
-        HeroImageView(
-            image: image,
-            maxHeight: 500,
-            namespace: namespace,
-            geometryID: "creation-hero-image",
-            usesMatchedGeometry: usesHeroMatchedGeometry && !reduceMotion
-        )
-        .momentCreationTransitionPhase(
-            phase(for: .heroImage),
-            reduceMotion: reduceMotion
-        )
-        .frame(height: heroReservedHeight, alignment: .top)
-        .clipped()
-    }
-
-    private var heroReservedHeight: CGFloat {
-        switch phase(for: .heroImage) {
-        case .visible:
-            return 500
-        case .hiddenBelow, .hiddenAbove:
-            return 0
-        }
-    }
 }
 
 private struct MomentCreationNoteStepPreview: View {
@@ -102,9 +72,7 @@ private struct MomentCreationNoteStepPreview: View {
 
     var body: some View {
         NoteStepView(
-            image: UIImage(systemName: "photo") ?? UIImage(),
             namespace: previewNamespace,
-            usesHeroMatchedGeometry: true,
             focus: $focusedField,
             elementPhases: TransitionStateResolver.settledPhases(for: .workflow(.note)),
             reduceMotion: false,

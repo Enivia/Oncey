@@ -79,7 +79,7 @@ enum TransitionResolver {
     private static let captureFadeDuration = 500
     private static let stageGap = 100
     private static let contentDuration = 300
-    private static let reminderStagger = 50
+    private static let reminderStagger = 100
 
     static func resolveAfterCapture(for mode: MomentCreationMode) -> MomentCreationTransitionPlan {
         resolve(
@@ -104,30 +104,23 @@ enum TransitionResolver {
         case (.capture, .workflow(.note)):
             return captureEntryPlan(route: .captureToNote, field: .noteCard)
         case (.workflow(.albumName), .workflow(.note)):
-            let buttonExitStart = contentDuration + stageGap
-            let fieldEnterStart = buttonExitStart + contentDuration
-            let buttonEnterStart = fieldEnterStart + contentDuration + stageGap
+            let fieldEnterStart = stageGap + contentDuration + contentDuration
 
             return stagedPlan(
                 route: .albumNameToNote,
                 stages: [
                     stage(0, contentDuration, .init(element: .albumNameField, action: .exit)),
-                    stage(buttonExitStart, contentDuration, .init(element: .primaryButton, action: .exit)),
                     stage(fieldEnterStart, contentDuration, .init(element: .noteCard, action: .enter)),
-                    stage(buttonEnterStart, contentDuration, .init(element: .primaryButton, action: .enter))
                 ]
             )
         case (.workflow(.note), .workflow(.reminder)):
-            let noteExitStart = contentDuration + stageGap
-            let buttonExitStart = noteExitStart + contentDuration + stageGap
-            let reminderStart = buttonExitStart + contentDuration
+            let noteExitStart = 200
+            let reminderStart = noteExitStart + contentDuration + stageGap
 
             return stagedPlan(
                 route: .noteToReminder,
                 stages: [
-                    stage(0, contentDuration, .init(element: .heroImage, action: .exit)),
                     stage(noteExitStart, contentDuration, .init(element: .noteCard, action: .exit)),
-                    stage(buttonExitStart, contentDuration, .init(element: .primaryButton, action: .exit)),
                     stage(reminderStart, contentDuration, .init(element: .reminderTitle, action: .enter)),
                     stage(reminderStart + reminderStagger, contentDuration, .init(element: .reminderPicker, action: .enter)),
                     stage(reminderStart + (reminderStagger * 2), contentDuration, .init(element: .reminderDescription, action: .enter)),
@@ -148,9 +141,7 @@ enum TransitionResolver {
         route: MomentCreationTransitionRoute,
         field: MomentCreationTransitionElement
     ) -> MomentCreationTransitionPlan {
-        let heroEnterStart = captureFadeDuration
-        let fieldEnterStart = heroEnterStart + stageGap
-        let buttonEnterStart = fieldEnterStart + stageGap
+        let fieldEnterStart = captureFadeDuration + stageGap
 
         return stagedPlan(
             route: route,
@@ -160,9 +151,7 @@ enum TransitionResolver {
                     captureFadeDuration,
                     .init(element: .background, action: .transition)
                 ),
-                stage(heroEnterStart, contentDuration, .init(element: .heroImage, action: .enter)),
-                stage(fieldEnterStart, contentDuration, .init(element: field, action: .enter)),
-                stage(buttonEnterStart, contentDuration, .init(element: .primaryButton, action: .enter))
+                stage(fieldEnterStart, contentDuration, .init(element: field, action: .enter))
             ]
         )
     }
@@ -181,12 +170,12 @@ enum TransitionResolver {
                     anchor: .containerCompletion,
                     .init(element: .completeCard, action: .enter)
                 ),
-                stage(
-                    timelineEnterStart,
-                    contentDuration,
-                    anchor: .containerCompletion,
-                    .init(element: .completeTimeline, action: .enter)
-                )
+//                stage(
+//                    timelineEnterStart,
+//                    contentDuration,
+//                    anchor: .containerCompletion,
+//                    .init(element: .completeTimeline, action: .enter)
+//                )
             ]
         )
     }
