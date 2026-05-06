@@ -12,11 +12,11 @@ struct AlbumTileView: View {
     let momentCountText: String
 
     private static let layerTransforms: [CardLayerTransform] = [
-        .init(x: -10, y: 10, angle: -1.8),
-        .init(x: 8, y: 8, angle: 1.4),
+        .init(x: -4, y: -4, angle: -1.8),
+        .init(x: 5, y: 2, angle: 1.4),
         .init(x: -5, y: 3, angle: -1.0),
-        .init(x: 6, y: 8, angle: 2.1),
-        .init(x: -8, y: 6, angle: -1.5),
+        .init(x: 6, y: -3, angle: 2.1),
+        .init(x: -3, y: 2, angle: -1.5),
     ]
 
     private var displayedLayerCount: Int {
@@ -64,7 +64,7 @@ struct AlbumTileView: View {
                     .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.cardRadius, y: AppTheme.Shadow.cardYOffset)
             }
         }
-        .padding(.bottom, AppTheme.Spacing.s6 + backdropBottomInset)
+        .padding(.bottom, AppTheme.Spacing.s2 + backdropBottomInset)
         .overlay(alignment: .topTrailing) {
             if let reminderCountdownText {
                 Text(reminderCountdownText)

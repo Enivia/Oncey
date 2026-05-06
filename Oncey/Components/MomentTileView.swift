@@ -50,12 +50,12 @@ struct MomentTileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous)
                 .fill(AppTheme.Colors.surface)
-                .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
+        .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius)
         .contextMenu {
             if let onEditNote {
                 Button(action: onEditNote) {

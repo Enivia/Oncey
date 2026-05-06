@@ -200,10 +200,10 @@ private struct AlbumReminderEntryView: View {
         .padding(AppTheme.Spacing.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous)
                 .fill(AppTheme.Colors.surface)
-                .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
         }
+        .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)
         .accessibilityElement(children: .combine)
     }
 }

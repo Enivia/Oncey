@@ -75,7 +75,7 @@ enum AppTheme {
         static let momentsPageHorizontalPadding: CGFloat = Spacing.s6
         static let momentsPageContentSpacing: CGFloat = Spacing.s3
         static let momentsTimestampHeight: CGFloat = 28
-        static let momentsNoteHeight: CGFloat = 32
+        static let momentsNoteHeight: CGFloat = 48
         static let momentsDotSize: CGFloat = 12
 
         static var screenWidth: CGFloat {
@@ -178,13 +178,13 @@ private struct LinenCanvasView: View {
             return (
                 bg:    UIColor(AppTheme.Colors.background),
                 light: UIColor(AppTheme.Colors.accentSoft.opacity(0.1)),
-                dark:  UIColor(AppTheme.Colors.secondarySoft.opacity(0.1))
+                dark:  UIColor(AppTheme.Colors.secondarySoft.opacity(0.2))
             )
         case .dark:
             return (
                 bg:    UIColor(AppTheme.Colors.accentSoft),
                 light: UIColor.white.withAlphaComponent(0.05),
-                dark:  UIColor(AppTheme.Colors.accent.opacity(0.08))
+                dark:  UIColor(AppTheme.Colors.accent.opacity(0.05))
             )
         }
     }

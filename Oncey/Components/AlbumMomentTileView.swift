@@ -69,7 +69,7 @@ struct AlbumMomentTileView: View {
     }
 
     private var contentColumn: some View {
-        VStack(alignment: .leading, spacing: metrics.contentSpacing) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.s2) {
             photoContent
             noteRow
         }
@@ -101,11 +101,12 @@ struct AlbumMomentTileView: View {
     private var noteRow: some View {
         Text(moment.note.isEmpty ? " " : moment.note)
             .font(.subheadline)
-            .foregroundStyle(AppTheme.Colors.textPrimary)
-            .lineLimit(1)
+            .italic()
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+            .lineLimit(2)
             .truncationMode(.tail)
             .multilineTextAlignment(.center)
-            .frame(width: contentColumnWidth, height: metrics.noteHeight, alignment: .center)
+            .frame(width: contentColumnWidth, height: metrics.noteHeight, alignment: .top)
             .accessibilityLabel(moment.note.isEmpty ? "No note" : moment.note)
     }
 

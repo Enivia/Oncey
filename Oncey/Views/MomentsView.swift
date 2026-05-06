@@ -8,7 +8,7 @@ struct MomentsView: View {
         SortDescriptor(\Moment.updatedAt, order: .reverse)
     ]) private var moments: [Moment]
 
-    @State private var pendingNoteEditorInput: TimelinePendingNoteEditorInput?
+    @State private var pendingTimelineInput: TimelineNavigationInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
     @State private var pendingDeleteMoment: Moment?
     @State private var errorMessage: String?
@@ -73,11 +73,19 @@ struct MomentsView: View {
         }
         .navigationTitle(viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $pendingNoteEditorInput) { input in
-            NavigationStack {
-                MomentNoteEditorSheet(moment: input.moment)
+        .navigationDestination(item: $pendingTimelineInput) { input in
+            if let album = resolvedAlbum(for: input) {
+                AlbumMomentsView(
+                    album: album,
+                    preferredCurrentMomentID: input.momentID
+                )
+            } else {
+                ContentUnavailableView(
+                    "Album unavailable",
+                    systemImage: "photo.on.rectangle.angled",
+                    description: Text("This moment's album could not be found.")
+                )
             }
-            .presentationDetents([.medium])
         }
         .fullScreenCover(item: $pendingShareInput) { input in
             NavigationStack {
@@ -108,13 +116,28 @@ struct MomentsView: View {
     }
 
     private func momentTile(for moment: Moment) -> some View {
+        Group {
+            if let album = moment.album {
+                Button {
+                    pendingTimelineInput = TimelineNavigationInput(
+                        albumID: album.id,
+                        momentID: moment.id
+                    )
+                } label: {
+                    momentTileContent(for: moment)
+                }
+                .buttonStyle(.plain)
+            } else {
+                momentTileContent(for: moment)
+            }
+        }
+    }
+
+    private func momentTileContent(for moment: Moment) -> some View {
         MomentTileView(
             moment: moment,
             monthDayText: viewModel.monthDayText(for: moment),
             albumNameText: viewModel.albumNameText(for: moment),
-            onEditNote: {
-                pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
-            },
             onShare: {
                 pendingShareInput = TimelinePendingShareInput(moment: moment)
             },
@@ -143,6 +166,11 @@ struct MomentsView: View {
             isPresentingError = true
         }
     }
+
+    private func resolvedAlbum(for input: TimelineNavigationInput) -> Album? {
+        moments.first(where: { $0.id == input.momentID })?.album
+            ?? moments.first(where: { $0.albumId == input.albumID })?.album
+    }
 }
 
 private struct TimelinePendingShareInput: Identifiable {
@@ -150,21 +178,12 @@ private struct TimelinePendingShareInput: Identifiable {
     let moment: Moment
 }
 
-private struct TimelinePendingNoteEditorInput: Hashable, Identifiable {
-    let id: UUID
-    let moment: Moment
+private struct TimelineNavigationInput: Identifiable, Hashable {
+    let albumID: UUID
+    let momentID: UUID
 
-    init(moment: Moment) {
-        self.id = moment.id
-        self.moment = moment
-    }
-
-    static func == (lhs: TimelinePendingNoteEditorInput, rhs: TimelinePendingNoteEditorInput) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
+    var id: UUID {
+        momentID
     }
 }
 

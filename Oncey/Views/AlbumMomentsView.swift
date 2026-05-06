@@ -7,6 +7,7 @@ struct AlbumMomentsView: View {
     @Environment(\.modelContext) private var modelContext
 
     let album: Album
+    private let preferredCurrentMomentID: UUID?
     @State private var isCreationPresented = false
     @State private var pendingNoteEditorInput: TimelinePendingNoteEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
@@ -18,6 +19,11 @@ struct AlbumMomentsView: View {
 
     private var viewModel: AlbumMomentsViewModel {
         AlbumMomentsViewModel(album: album)
+    }
+
+    init(album: Album, preferredCurrentMomentID: UUID? = nil) {
+        self.album = album
+        self.preferredCurrentMomentID = preferredCurrentMomentID
     }
 
     var body: some View {
@@ -170,19 +176,11 @@ struct AlbumMomentsView: View {
     }
 
     private func syncCurrentMomentID(with moments: [Moment]) {
-        guard let firstMoment = moments.first else {
-            currentMomentID = nil
-            return
-        }
-
-        guard let currentMomentID else {
-            self.currentMomentID = firstMoment.id
-            return
-        }
-
-        if !moments.contains(where: { $0.id == currentMomentID }) {
-            self.currentMomentID = firstMoment.id
-        }
+        currentMomentID = AlbumMomentsViewModel.resolvedCurrentMomentID(
+            in: moments,
+            currentMomentID: currentMomentID,
+            preferredCurrentMomentID: preferredCurrentMomentID
+        )
     }
 
     private func focusMostRecentMoment(in album: Album) {
