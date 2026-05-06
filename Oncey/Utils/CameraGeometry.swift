@@ -33,6 +33,14 @@ enum CameraCaptureAspect: String, CaseIterable, Identifiable, Codable, Sendable 
         }
     }
 
+    func aspectRatio(for orientation: MomentPhotoOrientation) -> CGFloat {
+        guard orientation.isLandscape, self != .square else {
+            return aspectRatio
+        }
+
+        return 1 / aspectRatio
+    }
+
     var next: Self {
         let allCases = Self.allCases
         guard let index = allCases.firstIndex(of: self) else {
@@ -44,8 +52,15 @@ enum CameraCaptureAspect: String, CaseIterable, Identifiable, Codable, Sendable 
     }
 
     static func closest(to aspectRatio: CGFloat) -> Self {
+        let normalizedAspectRatio: CGFloat
+        if aspectRatio > 1 {
+            normalizedAspectRatio = 1 / aspectRatio
+        } else {
+            normalizedAspectRatio = aspectRatio
+        }
+
         let candidates = Self.allCases.map { aspect in
-            (aspect: aspect, distance: abs(aspect.aspectRatio - aspectRatio))
+            (aspect: aspect, distance: abs(aspect.aspectRatio - normalizedAspectRatio))
         }
 
         return candidates.min { $0.distance < $1.distance }?.aspect ?? .threeByFour
@@ -73,13 +88,13 @@ enum CameraGeometry {
     static func captureStageLayout(
         stageWidth: CGFloat,
         aspect: CameraCaptureAspect,
+        orientation: MomentPhotoOrientation = .portrait,
         bottomInset: CGFloat
     ) -> CameraCaptureStageLayout {
         let safeStageWidth = max(stageWidth, 1)
         let safeBottomInset = max(bottomInset, 0)
         let stageHeight = safeStageWidth / CameraCaptureAspect.nineBySixteen.aspectRatio
         let referenceHeight = safeStageWidth / CameraCaptureAspect.threeByFour.aspectRatio
-        let frameHeight = safeStageWidth / max(aspect.aspectRatio, 0.01)
         let stageRect = CGRect(x: 0, y: 0, width: safeStageWidth, height: stageHeight)
         let referenceRect = CGRect(
             x: 0,
@@ -88,21 +103,39 @@ enum CameraGeometry {
             height: referenceHeight
         )
 
-        let frameMinY: CGFloat
+        let frameContainerRect: CGRect
         switch aspect {
-        case .square:
-            frameMinY = referenceRect.minY + (referenceRect.height - frameHeight) / 2
-        case .threeByFour:
-            frameMinY = referenceRect.minY
         case .nineBySixteen:
-            frameMinY = stageRect.minY
+            frameContainerRect = stageRect
+        case .threeByFour, .square:
+            frameContainerRect = referenceRect
+        }
+
+        let frameSourceSize = CGSize(
+            width: aspect.aspectRatio(for: orientation) * 1_000,
+            height: 1_000
+        )
+        let frameSize = fittedSize(for: frameSourceSize, in: frameContainerRect.size)
+
+        let frameMinY: CGFloat
+        if orientation.isLandscape {
+            frameMinY = frameContainerRect.minY + (frameContainerRect.height - frameSize.height) / 2
+        } else {
+            switch aspect {
+            case .square:
+                frameMinY = referenceRect.minY + (referenceRect.height - frameSize.height) / 2
+            case .threeByFour:
+                frameMinY = referenceRect.minY
+            case .nineBySixteen:
+                frameMinY = stageRect.minY
+            }
         }
 
         let frameRect = CGRect(
-            x: 0,
+            x: frameContainerRect.minX + (frameContainerRect.width - frameSize.width) / 2,
             y: frameMinY,
-            width: safeStageWidth,
-            height: frameHeight
+            width: frameSize.width,
+            height: frameSize.height
         )
 
         return CameraCaptureStageLayout(

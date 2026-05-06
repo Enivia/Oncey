@@ -94,24 +94,25 @@ struct MomentTileView: View {
     }
 
         private var resolvedCoverSourceSize: CGSize {
-        guard let resolvedPhotoPath,
-              let imageSize = ImageResourceService.imageSize(from: resolvedPhotoPath),
-              imageSize.width > 0,
-              imageSize.height > 0 else {
-            return CGSize(width: 4, height: 3)
-        }
-
-        return imageSize
+            MomentPhotoLayoutResolver.displaySourceSize(
+                imageSize: resolvedImageSize,
+                albumRatio: moment.album?.ratio,
+                photoOrientation: moment.photoOrientation
+            )
     }
 
     private var resolvedCoverAspectRatio: CGFloat {
         let sourceSize = resolvedCoverSourceSize
-        guard sourceSize.width > 0, sourceSize.height > 0 else {
-            return 4 / 3
-        }
-
         return sourceSize.width / sourceSize.height
     }
+
+        private var resolvedImageSize: CGSize? {
+            guard let resolvedPhotoPath else {
+                return nil
+            }
+
+            return ImageResourceService.imageSize(from: resolvedPhotoPath)
+        }
 }
 
 #Preview {

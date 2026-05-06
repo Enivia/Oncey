@@ -100,16 +100,6 @@ struct MomentComparisonView: View {
     }
 
     private func resolvedAspectRatio(leadingMoment: Moment, trailingMoment: Moment) -> CGFloat {
-        if let templatePhotoAspectRatio = album.templatePhotoAspectRatio,
-           templatePhotoAspectRatio > 0 {
-            return CGFloat(templatePhotoAspectRatio)
-        }
-
-        if let ratio = album.ratio?.aspectRatio,
-           ratio > 0 {
-            return ratio
-        }
-
         let moments = [leadingMoment, trailingMoment]
 
         for moment in moments {
@@ -122,6 +112,23 @@ struct MomentComparisonView: View {
             return size.width / size.height
         }
 
-        return CameraCaptureAspect.threeByFour.aspectRatio
+        if let templatePhotoAspectRatio = album.templatePhotoAspectRatio,
+           templatePhotoAspectRatio > 0 {
+            return CGFloat(templatePhotoAspectRatio)
+        }
+
+        if album.ratio != nil {
+            return MomentPhotoLayoutResolver.displayAspectRatio(
+                imageSize: nil,
+                albumRatio: album.ratio,
+                photoOrientation: leadingMoment.photoOrientation
+            )
+        }
+
+        return MomentPhotoLayoutResolver.displayAspectRatio(
+            imageSize: nil,
+            albumRatio: nil,
+            photoOrientation: leadingMoment.photoOrientation
+        )
     }
 }

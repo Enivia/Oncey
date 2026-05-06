@@ -45,11 +45,11 @@ struct MomentCard1: View {
     }
 
     private var photoAspectRatio: CGFloat {
-        guard let imageSize = ImageResourceService.imageSize(from: moment.photo), imageSize.width > 0, imageSize.height > 0 else {
-            return 4 / 3
-        }
-
-        return imageSize.width / imageSize.height
+        MomentPhotoLayoutResolver.displayAspectRatio(
+            imageSize: ImageResourceService.imageSize(from: moment.photo),
+            albumRatio: moment.album?.ratio,
+            photoOrientation: moment.photoOrientation
+        )
     }
 }
 

@@ -61,6 +61,44 @@ struct CameraGeometryTests {
         #expect(CameraCaptureAspect.nineBySixteen.next == .threeByFour)
     }
 
+    @Test func closestAspectTreatsLandscapeFourByThreeAsThreeByFourFamily() {
+        #expect(CameraCaptureAspect.closest(to: 4 / 3) == .threeByFour)
+    }
+
+    @Test func closestAspectTreatsLandscapeSixteenByNineAsNineBySixteenFamily() {
+        #expect(CameraCaptureAspect.closest(to: 16 / 9) == .nineBySixteen)
+    }
+
+    @Test func portraitOrientationIsInferredFromTallImage() {
+        #expect(MomentPhotoOrientation.inferred(from: CGSize(width: 900, height: 1200)) == .portrait)
+    }
+
+    @Test func landscapeOrientationIsInferredFromWideImage() {
+        #expect(MomentPhotoOrientation.inferred(from: CGSize(width: 1600, height: 900)) == .landscape)
+    }
+
+    @Test func landscapeOrientationFlipsThreeByFourIntoFourByThreeAspectRatio() {
+        #expect(isClose(CameraCaptureAspect.threeByFour.aspectRatio(for: .landscape), 4 / 3))
+    }
+
+    @Test func landscapeOrientationCentersThreeByFourFrameInsideReferenceRegion() {
+        let layout = CameraGeometry.captureStageLayout(
+            stageWidth: 360,
+            aspect: .threeByFour,
+            orientation: .landscape,
+            bottomInset: 8
+        )
+
+        #expect(isClose(layout.referenceRect.minY, 0))
+        #expect(isClose(layout.referenceRect.height, 480))
+        #expect(isClose(layout.frameRect.minX, 0))
+        #expect(isClose(layout.frameRect.minY, 105, tolerance: 0.01))
+        #expect(isClose(layout.frameRect.width, 360))
+        #expect(isClose(layout.frameRect.height, 270))
+        #expect(isClose(layout.maskSliderBottomY, 472))
+        #expect(isClose(layout.captureControlsBottomY, 632))
+    }
+
     @Test func squareCropUsesCenteredVerticalSlice() {
         let cropRect = CameraGeometry.cropRect(
             for: CGSize(width: 400, height: 800),

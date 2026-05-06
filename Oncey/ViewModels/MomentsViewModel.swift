@@ -37,7 +37,6 @@ struct MomentsViewModel {
         return formatter
     }()
 
-    private static let fallbackPhotoSize = CGSize(width: 4, height: 3)
     private static let metadataHeightWithoutNote: CGFloat = 76
     private static let metadataHeightWithNote: CGFloat = 120
 
@@ -161,13 +160,13 @@ struct MomentsViewModel {
         imageSizeResolver: (Moment) -> CGSize?
     ) -> CGFloat {
         let resolvedItemWidth = max(itemWidth, 1)
-        let sourceSize = imageSizeResolver(moment) ?? Self.fallbackPhotoSize
+        let sourceSize = imageSizeResolver(moment) ?? Self.fallbackPhotoSize(for: moment)
         let resolvedSourceSize: CGSize
 
         if sourceSize.width > 0, sourceSize.height > 0 {
             resolvedSourceSize = sourceSize
         } else {
-            resolvedSourceSize = Self.fallbackPhotoSize
+            resolvedSourceSize = Self.fallbackPhotoSize(for: moment)
         }
 
         return resolvedItemWidth * (resolvedSourceSize.height / resolvedSourceSize.width)
@@ -193,6 +192,18 @@ struct MomentsViewModel {
             return nil
         }
 
-        return ImageResourceService.imageSize(from: moment.photo)
+        return MomentPhotoLayoutResolver.displaySourceSize(
+            imageSize: ImageResourceService.imageSize(from: moment.photo),
+            albumRatio: moment.album?.ratio,
+            photoOrientation: moment.photoOrientation
+        )
+    }
+
+    private static func fallbackPhotoSize(for moment: Moment) -> CGSize {
+        MomentPhotoLayoutResolver.displaySourceSize(
+            imageSize: nil,
+            albumRatio: moment.album?.ratio,
+            photoOrientation: moment.photoOrientation
+        )
     }
 }

@@ -105,14 +105,36 @@ struct AlbumTileView: View {
     }
 
     private var resolvedCoverSourceSize: CGSize {
-        guard let coverPhotoPath,
-              let imageSize = ImageResourceService.imageSize(from: coverPhotoPath),
-              imageSize.width > 0,
-              imageSize.height > 0 else {
-            return CGSize(width: 4, height: 3)
+        MomentPhotoLayoutResolver.displaySourceSize(
+            imageSize: resolvedCoverImageSize,
+            albumRatio: album.ratio,
+            photoOrientation: resolvedCoverPhotoOrientation
+        )
+    }
+
+    private var resolvedCoverImageSize: CGSize? {
+        guard let coverPhotoPath else {
+            return nil
         }
 
-        return imageSize
+        return ImageResourceService.imageSize(from: coverPhotoPath)
+    }
+
+    private var resolvedCoverPhotoOrientation: MomentPhotoOrientation {
+        if let coverPhotoPath,
+           let matchingMoment = album.moments.first(where: { $0.photo == coverPhotoPath }) {
+            return matchingMoment.photoOrientation
+        }
+
+        let latestMoment = album.moments.max { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.updatedAt < rhs.updatedAt
+            }
+
+            return lhs.createdAt < rhs.createdAt
+        }
+
+        return latestMoment?.photoOrientation ?? .portrait
     }
 }
 

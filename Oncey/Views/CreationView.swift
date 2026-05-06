@@ -243,6 +243,7 @@ struct CreationView: View {
     @State private var albumName: String
     @State private var note = ""
     @State private var selectedAspect: CameraCaptureAspect
+    @State private var selectedPhotoOrientation: MomentPhotoOrientation
     @State private var captureDraft: MomentCreationCaptureDraft?
     @State private var cachedCaptureLayout: MomentCreationCaptureLayout?
     @State private var cameraCaptureState = MomentCreationCameraCaptureState()
@@ -288,6 +289,7 @@ struct CreationView: View {
         let selection = Self.initialReminderSelection(for: mode)
         _albumName = State(initialValue: mode.album?.name ?? "")
         _selectedAspect = State(initialValue: Self.initialAspect(for: mode))
+        _selectedPhotoOrientation = State(initialValue: Self.initialOrientation(for: mode))
         _reminderValue = State(initialValue: selection.value)
         _reminderUnit = State(initialValue: selection.unit)
     }
@@ -331,6 +333,13 @@ struct CreationView: View {
                 updateCameraLifecycle(for: currentStep)
             }
             .onChange(of: selectedAspect) { _, _ in
+                preparedImage = nil
+
+                if isShowingInteractiveCaptureCrop {
+                    resetCaptureCropTransform()
+                }
+            }
+            .onChange(of: selectedPhotoOrientation) { _, _ in
                 preparedImage = nil
 
                 if isShowingInteractiveCaptureCrop {
@@ -552,6 +561,15 @@ struct CreationView: View {
                         Text(selectedAspect.label)
                     }
                     .disabled(!captureInteractivity.allowsAspectToggle)
+                }
+
+                if showsPhotoOrientationButton {
+                    Button {
+                        selectedPhotoOrientation = selectedPhotoOrientation.toggled
+                    } label: {
+                        Image(systemName: "rotate.right")
+                    }
+                    .accessibilityLabel("Toggle orientation")
                 }
 
                 if captureChrome.showsConfirmButton {
@@ -818,6 +836,10 @@ struct CreationView: View {
             .disabled(!captureInteractivity.allowsCameraToggle)
             .opacity(captureInteractivity.allowsCameraToggle ? 1 : 0.55)
         }
+    }
+
+    private var showsPhotoOrientationButton: Bool {
+        capturePreviewKind == .photoLibraryCrop && previewCropAspect != .square
     }
 
     private var isCaptureStep: Bool {
@@ -1198,6 +1220,7 @@ struct CreationView: View {
             let moment = Moment(
                 album: album,
                 photo: photoPath,
+                photoOrientation: .inferred(from: preparedImage.size),
                 note: note,
                 createdAt: now,
                 updatedAt: now
@@ -1319,6 +1342,7 @@ struct CreationView: View {
         let stageLayout = CameraGeometry.captureStageLayout(
             stageWidth: stageWidth,
             aspect: currentCaptureDisplayAspect,
+            orientation: currentCaptureDisplayOrientation,
             bottomInset: AppTheme.Spacing.s2
         )
         let previewSize = if let captureDraft, captureDraft.source == .photoLibrary {
@@ -1386,6 +1410,9 @@ struct CreationView: View {
     private func setCaptureDraft(_ image: UIImage, source: MomentCreationCaptureSource) -> MomentCreationCaptureDraft {
         let draft = MomentCreationCaptureDraft(image: image, source: source)
         captureDraft = draft
+        selectedPhotoOrientation = source == .photoLibrary
+            ? MomentPhotoOrientation.inferred(from: image.size)
+            : .portrait
         preparedImage = nil
         resetCaptureCropTransform()
         return draft
@@ -1393,6 +1420,7 @@ struct CreationView: View {
 
     private func resetCaptureDraft() {
         captureDraft = nil
+        selectedPhotoOrientation = Self.initialOrientation(for: mode)
         preparedImage = nil
         isCaptureFlashVisible = false
         cameraCaptureState.finishCapture()
@@ -1779,6 +1807,15 @@ struct CreationView: View {
         }
     }
 
+    private var currentCaptureDisplayOrientation: MomentPhotoOrientation {
+        switch captureDraft?.source {
+        case .photoLibrary:
+            return selectedPhotoOrientation
+        case .camera, .none:
+            return .portrait
+        }
+    }
+
     private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
         if let album = mode.album,
            let remindValue = album.remindValue,
@@ -1794,22 +1831,31 @@ struct CreationView: View {
             return .threeByFour
         }
 
-        if let ratio = album.ratio {
-            return ratio
+        let latestMomentPhotoSize = mode.latestMoment.flatMap { moment in
+            ImageResourceService.imageSize(from: moment.photo)
         }
 
-        if let templateAspectRatio = album.templatePhotoAspectRatio {
-            return CameraCaptureAspect.closest(to: CGFloat(templateAspectRatio))
+        return MomentPhotoLayoutResolver.initialAspect(
+            albumRatio: album.ratio,
+            templatePhotoSize: album.templatePhotoSize,
+            latestMomentPhotoSize: latestMomentPhotoSize
+        )
+    }
+
+    private static func initialOrientation(for mode: MomentCreationMode) -> MomentPhotoOrientation {
+        guard let album = mode.album else {
+            return .portrait
         }
 
-        if let latestMoment = mode.latestMoment,
-           let imageSize = ImageResourceService.imageSize(from: latestMoment.photo),
-           imageSize.width > 0,
-           imageSize.height > 0 {
-            return CameraCaptureAspect.closest(to: imageSize.width / imageSize.height)
+        let latestMomentPhotoSize = mode.latestMoment.flatMap { moment in
+            ImageResourceService.imageSize(from: moment.photo)
         }
 
-        return .threeByFour
+        return MomentPhotoLayoutResolver.initialOrientation(
+            templatePhotoSize: album.templatePhotoSize,
+            latestMomentPhotoOrientation: mode.latestMoment?.photoOrientation,
+            latestMomentPhotoSize: latestMomentPhotoSize
+        )
     }
 }
 
