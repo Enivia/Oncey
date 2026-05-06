@@ -19,7 +19,7 @@ struct MomentComparisonView: View {
 
     var body: some View {
         ZStack {
-            AppPageBackground(style: .dotted)
+            AppPageBackground()
 
             if let leadingMoment = comparisonState.leadingMoment,
                let trailingMoment = comparisonState.trailingMoment {

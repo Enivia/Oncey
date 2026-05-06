@@ -113,58 +113,116 @@ enum AppTheme {
 }
 
 enum AppPageBackgroundStyle {
-    case plain
-    case dotted
+    case dark
+    case light
 }
 
 struct AppPageBackground: View {
     let style: AppPageBackgroundStyle
 
-    init(style: AppPageBackgroundStyle = .plain) {
+    init(style: AppPageBackgroundStyle = .light) {
         self.style = style
     }
 
     var body: some View {
-        ZStack {
-            AppTheme.Colors.background
-
-            if style == .dotted {
-                DottedBackgroundOverlay()
-            }
+        GeometryReader { proxy in
+            let size = proxy.size
+            LinenCanvasView(size: size, style: style)
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
 }
 
+
 extension View {
-    func appPageBackground(_ style: AppPageBackgroundStyle = .plain) -> some View {
+    func appPageBackground(_ style: AppPageBackgroundStyle = .light) -> some View {
         background {
             AppPageBackground(style: style)
         }
     }
 }
 
-private struct DottedBackgroundOverlay: View {
+private struct LinenCanvasView: View {
+    let size: CGSize
+    let style: AppPageBackgroundStyle
+    @State private var rendered: UIImage?
+    
     var body: some View {
-        Canvas(rendersAsynchronously: true) { context, size in
-            let diameter = AppTheme.BackgroundDots.diameter
-            let step = AppTheme.BackgroundDots.step
-            let horizontalInset = AppTheme.BackgroundDots.horizontalInset
-            let verticalInset = AppTheme.BackgroundDots.verticalInset
-            let columnCount = Int(ceil(max(0, size.width - horizontalInset * 2) / step)) + 2
-            let rowCount = Int(ceil(max(0, size.height - verticalInset * 2) / step)) + 2
-            let dotRect = CGRect(origin: .zero, size: CGSize(width: diameter, height: diameter))
-
-            for row in 0..<rowCount {
-                for column in 0..<columnCount {
-                    let x = horizontalInset + CGFloat(column) * step
-                    let y = verticalInset + CGFloat(row) * step
-                    let dotPath = Path(ellipseIn: dotRect.offsetBy(dx: x, dy: y))
-                    context.fill(dotPath, with: .color(AppTheme.Colors.backgroundDot))
-                }
+        Group {
+            if let rendered {
+                Image(uiImage: rendered)
+                    .resizable()
+                    .ignoresSafeArea()
+            } else {
+                // 生成前显示底色，避免白屏
+                backgroundColor
             }
         }
+        .task(id: size) {
+            // 只在 size 变化时重新生成（首次 + 横竖屏切换）
+            rendered = await renderLinen(size: size)
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch style {
+            case .light:  return AppTheme.Colors.background
+            case .dark: return AppTheme.Colors.accentSoft
+        }
+    }
+
+    private func colors() -> (bg: UIColor, light: UIColor, dark: UIColor) {
+        switch style {
+        case .light:
+            return (
+                bg:    UIColor(AppTheme.Colors.background),
+                light: UIColor(AppTheme.Colors.accentSoft.opacity(0.1)),
+                dark:  UIColor(AppTheme.Colors.secondarySoft.opacity(0.1))
+            )
+        case .dark:
+            return (
+                bg:    UIColor(AppTheme.Colors.accentSoft),
+                light: UIColor.white.withAlphaComponent(0.05),
+                dark:  UIColor(AppTheme.Colors.accent.opacity(0.08))
+            )
+        }
+    }
+
+    private func renderLinen(size: CGSize) async -> UIImage {
+        let (bgColor, lightColor, darkColor) = colors()
+
+        return await Task.detached(priority: .userInitiated) {
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { ctx in
+                let context = ctx.cgContext
+
+                bgColor.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+
+                var y: CGFloat = 0
+                while y < size.height {
+                    let color = Int(y / 2) % 2 == 0 ? lightColor : darkColor
+                    context.setStrokeColor(color.cgColor)
+                    context.setLineWidth(0.8)
+                    context.move(to: CGPoint(x: 0, y: y))
+                    context.addLine(to: CGPoint(x: size.width, y: y))
+                    context.strokePath()
+                    y += 2
+                }
+
+                var x: CGFloat = 0
+                while x < size.width {
+                    let color = Int(x / 2) % 2 == 0 ? darkColor : lightColor
+                    context.setStrokeColor(color.cgColor)
+                    context.setLineWidth(0.6)
+                    context.move(to: CGPoint(x: x, y: 0))
+                    context.addLine(to: CGPoint(x: x, y: size.height))
+                    context.strokePath()
+                    x += 2
+                }
+            }
+        }.value
     }
 }
 

@@ -24,7 +24,7 @@ struct AlbumMomentsView: View {
         let moments = viewModel.moments
 
         ZStack {
-            AppPageBackground(style: .dotted)
+            AppPageBackground()
 
             Group {
                 if moments.isEmpty {

@@ -18,7 +18,7 @@ struct MomentsView: View {
 
     var body: some View {
         ZStack {
-            AppPageBackground(style: .dotted)
+            AppPageBackground()
 
             Group {
                 if moments.isEmpty {

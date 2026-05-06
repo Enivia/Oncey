@@ -19,7 +19,7 @@ struct MomentNoteEditorSheet: View {
 
     var body: some View {
         ZStack {
-            AppPageBackground(style: .dotted)
+            AppPageBackground()
 
             VStack(spacing: AppTheme.Spacing.s5) {
                 noteEditor

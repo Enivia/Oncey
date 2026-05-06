@@ -15,7 +15,7 @@ struct AlbumsView: View {
 
     var body: some View {
         ZStack {
-            AppPageBackground(style: .dotted)
+            AppPageBackground(style: .dark)
 
             Group {
                 if albums.isEmpty {
