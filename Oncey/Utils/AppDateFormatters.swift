@@ -13,4 +13,19 @@ enum AppDateFormatters {
         formatter.timeStyle = .short
         return formatter
     }()
+
+    static let momentCompactDate = makeMomentCompactDateFormatter()
+
+    static func makeMomentCompactDateFormatter(
+        locale: Locale = .autoupdatingCurrent,
+        timeZone: TimeZone = .autoupdatingCurrent,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.calendar = calendar
+        formatter.setLocalizedDateFormatFromTemplate("yMd")
+        return formatter
+    }
 }

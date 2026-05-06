@@ -72,6 +72,22 @@ struct AlbumMomentsView: View {
             .presentationDetents([.medium])
         }
         .toolbar {
+            if moments.count > 1 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        MomentComparisonView(
+                            album: album,
+                            currentMomentID: resolvedComparisonCurrentMomentID(in: moments)
+                        )
+                    } label: {
+                        Image(systemName: "square.and.line.vertical.and.square.filled")
+                    }
+                    .accessibilityLabel("Compare moments")
+                }
+            }
+            
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isCreationPresented = true
@@ -171,6 +187,15 @@ struct AlbumMomentsView: View {
 
     private func focusMostRecentMoment(in album: Album) {
         currentMomentID = AlbumMomentsViewModel(album: album).moments.first?.id
+    }
+
+    private func resolvedComparisonCurrentMomentID(in moments: [Moment]) -> UUID? {
+        guard let currentMomentID,
+              moments.contains(where: { $0.id == currentMomentID }) else {
+            return moments.first?.id
+        }
+
+        return currentMomentID
     }
 
     private func deleteMoments(_ moments: [Moment]) {
