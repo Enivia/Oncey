@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 #if canImport(SwiftData)
 import SwiftData
 #endif
@@ -42,7 +45,10 @@ struct AlbumMomentsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     GeometryReader { proxy in
-                        let metrics = MomentTimelinePageMetrics(containerSize: proxy.size)
+                        let metrics = MomentTimelinePageMetrics(
+                            containerSize: proxy.size,
+                            heightReference: screenHeight(for: proxy.size)
+                        )
 
                         ScrollView(.vertical) {
                             LazyVStack(spacing: 0) {
@@ -78,22 +84,6 @@ struct AlbumMomentsView: View {
             .presentationDetents([.medium])
         }
         .toolbar {
-            if moments.count > 1 {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        MomentComparisonView(
-                            album: album,
-                            currentMomentID: resolvedComparisonCurrentMomentID(in: moments)
-                        )
-                    } label: {
-                        Image(systemName: "square.and.line.vertical.and.square.filled")
-                    }
-                    .accessibilityLabel("Compare moments")
-                }
-            }
-            
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isCreationPresented = true
@@ -101,6 +91,10 @@ struct AlbumMomentsView: View {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add moment")
+            }
+
+            if !moments.isEmpty {
+                bottomToolbar(for: moments)
             }
         }
         .fullScreenCover(isPresented: $isCreationPresented) {
@@ -143,16 +137,7 @@ struct AlbumMomentsView: View {
             moment: moment,
             timestampText: viewModel.timestampText(for: moment),
             metrics: metrics,
-            isCurrent: isCurrent(moment),
-            onEditNote: {
-                pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
-            },
-            onShare: {
-                pendingShareInput = TimelinePendingShareInput(moment: moment)
-            },
-            onDelete: {
-                pendingSingleDeleteMoment = moment
-            }
+            isCurrent: isCurrent(moment)
         )
     }
 
@@ -181,6 +166,151 @@ struct AlbumMomentsView: View {
             currentMomentID: currentMomentID,
             preferredCurrentMomentID: preferredCurrentMomentID
         )
+    }
+
+    private func currentMoment(in moments: [Moment]) -> Moment? {
+        if let currentMomentID,
+           let moment = moments.first(where: { $0.id == currentMomentID }) {
+            return moment
+        }
+
+        return moments.first
+    }
+
+    private func currentYear(in moments: [Moment]) -> Int? {
+        viewModel.year(for: currentMoment(in: moments)?.id)
+    }
+
+    private func selectYear(_ year: Int, in moments: [Moment]) {
+        guard currentYear(in: moments) != year,
+              let targetMomentID = viewModel.latestMomentID(inYear: year) else {
+            return
+        }
+
+        currentMomentID = targetMomentID
+    }
+
+    private func editNote(for moment: Moment) {
+        pendingNoteEditorInput = TimelinePendingNoteEditorInput(moment: moment)
+    }
+
+    private func share(_ moment: Moment) {
+        pendingShareInput = TimelinePendingShareInput(moment: moment)
+    }
+
+    private func requestDelete(_ moment: Moment) {
+        pendingSingleDeleteMoment = moment
+    }
+
+    @ToolbarContentBuilder
+    private func bottomToolbar(for moments: [Moment]) -> some ToolbarContent {
+        let currentMoment = currentMoment(in: moments)
+        let currentYear = currentYear(in: moments)
+
+        ToolbarItem(placement: .bottomBar) {
+            Menu {
+                ForEach(viewModel.availableYears, id: \.self) { year in
+                    Button {
+                        selectYear(year, in: moments)
+                    } label: {
+                        if year == currentYear {
+                            Label(String(year), systemImage: "checkmark")
+                        } else {
+                            Text(String(year))
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: AppTheme.Spacing.s2) {
+                    Image(systemName: "calendar")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.Colors.accent)
+
+                    Text(currentYear.map(String.init) ?? "--")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.accent)
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+            }
+            .menuOrder(.fixed)
+            .accessibilityLabel("Select year")
+        }
+
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+
+        if moments.count > 1 {
+            ToolbarItem(placement: .bottomBar) {
+                NavigationLink {
+                    MomentComparisonView(
+                        album: album,
+                        currentMomentID: resolvedComparisonCurrentMomentID(in: moments)
+                    )
+                } label: {
+                    Image(systemName: "square.and.line.vertical.and.square.filled")
+                }
+                .accessibilityLabel("Compare")
+            }
+        }
+        
+        ToolbarSpacer(.fixed, placement: .bottomBar)
+
+        ToolbarItem(placement: .bottomBar) {
+            Menu {
+                Button {
+                    guard let currentMoment else {
+                        return
+                    }
+
+                    editNote(for: currentMoment)
+                } label: {
+                    Label("Note", systemImage: "long.text.page.and.pencil")
+                }
+
+                Button {
+                    guard let currentMoment else {
+                        return
+                    }
+
+                    share(currentMoment)
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+
+                Button(role: .destructive) {
+                    guard let currentMoment else {
+                        return
+                    }
+
+                    requestDelete(currentMoment)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .menuOrder(.fixed)
+            .disabled(currentMoment == nil)
+            .accessibilityLabel("More actions")
+        }
+    }
+
+    private func screenHeight(for containerSize: CGSize) -> CGFloat {
+#if canImport(UIKit)
+        max(containerSize.height, UIScreen.main.bounds.height)
+#else
+        containerSize.height
+#endif
+    }
+
+    private func hasNote(_ moment: Moment?) -> Bool {
+        guard let moment else {
+            return false
+        }
+
+        return !moment.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func focusMostRecentMoment(in album: Album) {

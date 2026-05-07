@@ -35,8 +35,7 @@ struct AlbumTileView: View {
         ZStack(alignment: .top) {
             ForEach(Array(backdropTransforms.enumerated().reversed()), id: \.offset) { index, transform in
                 Rectangle()
-                    .fill(AppTheme.Colors.surface.opacity(0.78 - Double(index) * 0.08))
-                    .border(AppTheme.Colors.border.opacity(0.75))
+                    .fill(AppTheme.Colors.surface.opacity(1 - Double(index) * 0.08))
                     .rotationEffect(.degrees(transform.angle))
                     .offset(x: transform.x, y: transform.y)
             }

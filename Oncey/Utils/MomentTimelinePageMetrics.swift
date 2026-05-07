@@ -2,11 +2,17 @@ import CoreGraphics
 
 struct MomentTimelinePageMetrics {
     let containerSize: CGSize
+    let heightReference: CGFloat
+
+    init(containerSize: CGSize, heightReference: CGFloat? = nil) {
+        self.containerSize = containerSize
+        self.heightReference = heightReference ?? containerSize.height
+    }
 
     var pageSize: CGSize {
         CGSize(
             width: containerSize.width,
-            height: max(0, containerSize.height * AppTheme.Layout.momentsPageHeightRatio)
+            height: max(0, heightReference * AppTheme.Layout.momentsPageHeightRatio)
         )
     }
 

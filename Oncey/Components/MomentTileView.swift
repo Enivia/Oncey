@@ -4,22 +4,18 @@ struct MomentTileView: View {
     let moment: Moment
     let monthDayText: String
     let albumNameText: String
-    let onEditNote: (() -> Void)?
     let onShare: (() -> Void)?
     let onDelete: (() -> Void)?
 
     init(
         moment: Moment,
         monthDayText: String,
-        albumNameText: String,
-        onEditNote: (() -> Void)? = nil,
-        onShare: (() -> Void)? = nil,
+        albumNameText: String,        onShare: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil
     ) {
         self.moment = moment
         self.monthDayText = monthDayText
         self.albumNameText = albumNameText
-        self.onEditNote = onEditNote
         self.onShare = onShare
         self.onDelete = onDelete
     }
@@ -57,12 +53,6 @@ struct MomentTileView: View {
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
         .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius)
         .contextMenu {
-            if let onEditNote {
-                Button(action: onEditNote) {
-                    Label("Note", systemImage: "long.text.page.and.pencil")
-                }
-            }
-
             if let onShare {
                 Button(action: onShare) {
                     Label("Share", systemImage: "square.and.arrow.up")

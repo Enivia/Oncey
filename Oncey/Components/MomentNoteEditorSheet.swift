@@ -74,11 +74,7 @@ struct MomentNoteEditorSheet: View {
                     .allowsHitTesting(false)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                .stroke(AppTheme.Colors.border, lineWidth: 1)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
     }
 
     private func save() {
@@ -112,7 +108,7 @@ private struct NoteEditorBackground: View {
                 var line = Path()
                 line.move(to: CGPoint(x: AppTheme.Spacing.s4, y: y))
                 line.addLine(to: CGPoint(x: size.width - AppTheme.Spacing.s4, y: y))
-                context.stroke(line, with: .color(AppTheme.Colors.accentSoft.opacity(0.8)), lineWidth: 1)
+                context.stroke(line, with: .color(AppTheme.Colors.accentSoft.opacity(0.1)), lineWidth: 1)
             }
         }
     }

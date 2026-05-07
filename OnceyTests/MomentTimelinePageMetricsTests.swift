@@ -4,6 +4,17 @@ import Testing
 
 struct MomentTimelinePageMetricsTests {
 
+    @Test func pageHeightCanUseExternalHeightReference() {
+        let metrics = MomentTimelinePageMetrics(
+            containerSize: CGSize(width: 360, height: 600),
+            heightReference: 1_000
+        )
+
+        #expect(isClose(metrics.pageSize.width, 360))
+        #expect(isClose(metrics.pageSize.height, 700))
+        #expect(isClose(metrics.verticalInset, 0))
+    }
+
     @Test func pageHeightUsesSeventyPercentOfContainerHeight() {
         let metrics = MomentTimelinePageMetrics(containerSize: CGSize(width: 360, height: 1_000))
 

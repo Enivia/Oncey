@@ -10,26 +10,17 @@ struct AlbumMomentTileView: View {
     let timestampText: String
     let metrics: MomentTimelinePageMetrics
     let isCurrent: Bool
-    let onEditNote: (() -> Void)?
-    let onShare: (() -> Void)?
-    let onDelete: (() -> Void)?
 
     init(
         moment: Moment,
         timestampText: String,
         metrics: MomentTimelinePageMetrics,
-        isCurrent: Bool,
-        onEditNote: (() -> Void)? = nil,
-        onShare: (() -> Void)? = nil,
-        onDelete: (() -> Void)? = nil
+        isCurrent: Bool
     ) {
         self.moment = moment
         self.timestampText = timestampText
         self.metrics = metrics
         self.isCurrent = isCurrent
-        self.onEditNote = onEditNote
-        self.onShare = onShare
-        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -39,25 +30,6 @@ struct AlbumMomentTileView: View {
             .contentShape(Rectangle())
             .opacity(isCurrent ? 1 : 0.3)
             .animation(.easeOut(duration: 0.3), value: isCurrent)
-            .contextMenu {
-                if let onEditNote {
-                    Button(action: onEditNote) {
-                        Label("Note", systemImage: "long.text.page.and.pencil")
-                    }
-                }
-
-                if let onShare {
-                    Button(action: onShare) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                }
-
-                if let onDelete {
-                    Button(role: .destructive, action: onDelete) {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-            }
     }
 
     private var pageContent: some View {

@@ -25,8 +25,6 @@ enum AppTheme {
         static let textSecondary = Color(rgbHex: 0x617075)
         
         static let background = Color(rgbHex: 0xF8FAFC)
-        static let backgroundDot = accent.opacity(0.1)
-        
     }
 
     enum Spacing {
@@ -62,15 +60,7 @@ enum AppTheme {
         static let floatingYOffset: CGFloat = 6
     }
 
-    enum BackgroundDots {
-        static let diameter: CGFloat = 3
-        static let step: CGFloat = Spacing.s6
-        static let horizontalInset: CGFloat = Spacing.s2
-        static let verticalInset: CGFloat = Spacing.s2
-    }
-
     enum Layout {
-        static let momentsPhotoMaxWidthRatio: CGFloat = 0.7
         static let momentsPageHeightRatio: CGFloat = 0.7
         static let momentsPageHorizontalPadding: CGFloat = Spacing.s6
         static let momentsPageContentSpacing: CGFloat = Spacing.s3
