@@ -20,27 +20,22 @@ struct MomentComparisonPicker: View {
                     }
                 }
             }
-            .frame(minHeight: 200)
             .padding(.horizontal, AppTheme.Spacing.s6)
+            .padding(.top, AppTheme.Spacing.s8)
+            .padding(.bottom, AppTheme.Spacing.s2)
         }
         .defaultScrollAnchor(.center)
         .frame(maxWidth: .infinity)
-        .frame(height: 200)
         .background(AppTheme.Colors.surface)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(AppTheme.Colors.border)
-                .frame(height: 1)
-        }
     }
 
     private func selectionBorder(for momentID: UUID) -> Color? {
         if momentID == leadingMomentID {
-            return AppTheme.Colors.accent
+            return AppTheme.Colors.accentSoft
         }
 
         if momentID == trailingMomentID {
-            return AppTheme.Colors.secondary
+            return AppTheme.Colors.secondarySoft
         }
 
         return nil
@@ -67,9 +62,8 @@ private struct MomentComparisonPickerItem: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: AppTheme.Spacing.s2) {
-                LocalPhotoView(path: moment.photo, contentMode: .fit)
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+                LocalPhotoView(path: moment.photo)
+                    .frame(width: 100, height: 100)
 
                 Text(AppDateFormatters.momentCompactDate.string(from: moment.createdAt))
                     .font(.caption.weight(.medium))
@@ -78,10 +72,10 @@ private struct MomentComparisonPickerItem: View {
             }
             .padding(AppTheme.Spacing.s2)
             .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md, style: .continuous)
-                    .stroke(selectionBorder ?? AppTheme.Colors.border, lineWidth: selectionBorder == nil ? 1 : 2)
+                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm, style: .continuous)
+                    .stroke(selectionBorder ?? AppTheme.Colors.border, lineWidth: 2)
             }
             .opacity(isDisabled && selectionBorder == nil ? 0.35 : 1)
         }

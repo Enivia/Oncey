@@ -64,7 +64,7 @@ struct AlbumMomentTileView: View {
     }
 
     private var photoContent: some View {
-        LocalPhotoView(path: moment.photo, contentMode: .fit)
+        LocalPhotoView(path: moment.photo)
             .frame(width: photoDisplaySize.width, height: photoDisplaySize.height)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl, style: .continuous))
             .shadow(color: AppTheme.Colors.shadow, radius: AppTheme.Shadow.softRadius, y: AppTheme.Shadow.softYOffset)

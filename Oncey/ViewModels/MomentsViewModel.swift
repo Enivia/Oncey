@@ -84,6 +84,18 @@ struct MomentsViewModel {
         return sections
     }
 
+    func availableYears(
+        from moments: [Moment],
+        calendar: Calendar = .current,
+        yearFormatter: DateFormatter = Self.yearFormatter
+    ) -> [Int] {
+        sections(
+            from: moments,
+            calendar: calendar,
+            yearFormatter: yearFormatter
+        ).map(\.year)
+    }
+
     func waterfallSections(
         from moments: [Moment],
         itemWidth: CGFloat,

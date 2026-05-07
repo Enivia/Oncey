@@ -82,33 +82,24 @@ struct AlbumTileView: View {
     private var coverImage: some View {
         GeometryReader { geometry in
             let containerSize = geometry.size
-            let fittedImageSize = AlbumCardCoverLayout.fittedImageSize(
-                for: resolvedCoverSourceSize,
-                in: containerSize
-            )
 
             ZStack {
-                LocalPhotoView(path: coverPhotoPath)
-                    .frame(width: containerSize.width, height: containerSize.height)
-                    .blur(radius: coverPhotoPath == nil ? 0 : 20)
-                    .scaleEffect(coverPhotoPath == nil ? 1 : 1.06)
-                    .clipped()
+                if coverPhotoPath != nil {
+                  LocalPhotoView(path: coverPhotoPath)
+                      .scaledToFill()
+                      .frame(maxWidth: containerSize.width, maxHeight: containerSize.height)
+                      .blur(radius: 20)
+                      .clipped()
+                }
 
-                LocalPhotoView(path: coverPhotoPath, contentMode: .fit)
-                    .frame(width: fittedImageSize.width, height: fittedImageSize.height)
+                LocalPhotoView(path: coverPhotoPath)
+                    .scaledToFit()
+                    .frame(width: containerSize.width, height: containerSize.height)
             }
             .frame(width: containerSize.width, height: containerSize.height)
         }
         .frame(maxWidth: .infinity)
         .aspectRatio(4 / 3, contentMode: .fit)
-    }
-
-    private var resolvedCoverSourceSize: CGSize {
-        MomentPhotoLayoutResolver.displaySourceSize(
-            imageSize: resolvedCoverImageSize,
-            albumRatio: album.ratio,
-            photoOrientation: resolvedCoverPhotoOrientation
-        )
     }
 
     private var resolvedCoverImageSize: CGSize? {

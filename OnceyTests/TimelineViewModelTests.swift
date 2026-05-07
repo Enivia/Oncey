@@ -4,6 +4,35 @@ import Testing
 @testable import Oncey
 
 struct TimelineViewModelTests {
+    @Test func availableYearsAreDeduplicatedInDescendingOrder() {
+        let viewModel = MomentsViewModel()
+        let calendar = makeCalendar()
+        let album = Album(name: "Trips")
+
+        let newest = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 4, day: 11, hour: 10),
+            updatedAt: makeDate(year: 2026, month: 4, day: 11, hour: 10)
+        )
+        let sameYearOlder = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2026, month: 1, day: 5, hour: 8),
+            updatedAt: makeDate(year: 2026, month: 1, day: 5, hour: 8)
+        )
+        let older = makeMoment(
+            album: album,
+            createdAt: makeDate(year: 2025, month: 12, day: 30, hour: 9),
+            updatedAt: makeDate(year: 2025, month: 12, day: 30, hour: 9)
+        )
+
+        let years = viewModel.availableYears(
+            from: [older, newest, sameYearOlder],
+            calendar: calendar
+        )
+
+        #expect(years == [2026, 2025])
+    }
+
     @Test func sectionsGroupMomentsByYearInDescendingOrder() {
         let viewModel = MomentsViewModel()
         let calendar = makeCalendar()

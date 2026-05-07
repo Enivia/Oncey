@@ -710,7 +710,7 @@ struct CreationView: View {
                 }
                 .overlay {
                     if let latestMomentPhotoPath, latestMomentPhotoPath.isEmpty == false {
-                        LocalPhotoView(path: latestMomentPhotoPath, contentMode: .fit)
+                        LocalPhotoView(path: latestMomentPhotoPath)
                             .frame(width: layout.frameRect.width, height: layout.frameRect.height)
                             .opacity(overlayOpacity)
                     }

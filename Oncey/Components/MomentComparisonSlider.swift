@@ -27,10 +27,10 @@ struct MomentComparisonSlider: View {
             let dividerX = resolvedLeadingWidth(for: size.width)
 
             ZStack(alignment: .leading) {
-                comparisonPhoto(path: trailingMoment.photo)
+                LocalPhotoView(path: trailingMoment.photo)
                     .frame(width: size.width, height: size.height)
 
-                comparisonPhoto(path: leadingMoment.photo)
+                LocalPhotoView(path: leadingMoment.photo)
                     .frame(width: size.width, height: size.height)
                     .frame(width: dividerX, alignment: .leading)
                     .clipped()
@@ -51,18 +51,8 @@ struct MomentComparisonSlider: View {
 
                 interactionLayer(containerWidth: size.width, height: size.height, dividerX: dividerX)
             }
-            .background(AppTheme.Colors.surface)
-            .overlay {
-                Rectangle()
-                    .stroke(AppTheme.Colors.border, lineWidth: 1)
-            }
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
-    }
-
-    private func comparisonPhoto(path: String?) -> some View {
-        LocalPhotoView(path: path, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func activeSelectionOverlay(
@@ -73,10 +63,9 @@ struct MomentComparisonSlider: View {
     ) -> some View {
         let isLeading = side == .leading
         let overlayWidth = isLeading ? leadingWidth : max(0, totalWidth - leadingWidth)
-        let overlayColor = isLeading ? AppTheme.Colors.accent : AppTheme.Colors.secondary
 
         return Rectangle()
-            .stroke(overlayColor, lineWidth: 3)
+            .stroke(AppTheme.Colors.accent, lineWidth:4)
             .frame(width: overlayWidth, height: height)
             .offset(x: isLeading ? 0 : leadingWidth)
             .allowsHitTesting(false)
@@ -87,16 +76,17 @@ struct MomentComparisonSlider: View {
             Rectangle()
                 .fill(Color.white.opacity(0.96))
                 .frame(width: 2, height: height)
+                .glassEffect()
 
             Circle()
-                .fill(.ultraThinMaterial)
                 .frame(width: handleDiameter, height: handleDiameter)
                 .overlay {
                     Image(systemName: "arrow.left.and.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.Colors.textPrimary)
                 }
-                .shadow(color: AppTheme.Colors.shadowEmphasis, radius: AppTheme.Shadow.emphasizedRadius, y: AppTheme.Shadow.emphasizedYOffset)
+                .glassEffect()
+                
         }
         .frame(width: handleHitWidth, height: height)
         .position(x: dividerX, y: height / 2)
@@ -108,7 +98,6 @@ struct MomentComparisonSlider: View {
         Rectangle()
             .fill(Color.white.opacity(0.001))
             .frame(width: containerWidth, height: height)
-            .contentShape(Rectangle())
             .highPriorityGesture(interactionGesture(containerWidth: containerWidth, dividerX: dividerX))
             .zIndex(2)
     }

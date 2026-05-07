@@ -4,7 +4,7 @@ struct MomentCard1: View {
     let moment: Moment
     let renderMode: MomentCardRenderMode
 
-    private var metrics: StyledCard1Metrics {
+    private var metrics: MomentCard1Metrics {
         switch renderMode {
         case .full:
             .full
@@ -23,9 +23,9 @@ struct MomentCard1: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
-            LocalPhotoView(path: moment.photo, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .aspectRatio(photoAspectRatio, contentMode: .fit)
+            
+            LocalPhotoView(path: renderMode == .thumbnail ? nil : moment.photo)
+                .aspectRatio(renderMode == .thumbnail ? 1 : nil, contentMode: .fit)
 
             if let noteText {
                 Text(noteText)
@@ -43,30 +43,22 @@ struct MomentCard1: View {
         .border(AppTheme.Colors.border)
         .background(.white)
     }
-
-    private var photoAspectRatio: CGFloat {
-        MomentPhotoLayoutResolver.displayAspectRatio(
-            imageSize: ImageResourceService.imageSize(from: moment.photo),
-            albumRatio: moment.album?.ratio,
-            photoOrientation: moment.photoOrientation
-        )
-    }
 }
 
-private struct StyledCard1Metrics {
+private struct MomentCard1Metrics {
     let sectionSpacing: CGFloat
     let dateFont: Font
     let noteFont: Font
     let padding: CGFloat
 
-    static let full = StyledCard1Metrics(
+    static let full = MomentCard1Metrics(
         sectionSpacing: AppTheme.Spacing.s3,
         dateFont: .subheadline,
         noteFont: .body,
         padding: AppTheme.Spacing.s6
     )
 
-    static let thumbnail = StyledCard1Metrics(
+    static let thumbnail = MomentCard1Metrics(
         sectionSpacing: AppTheme.Spacing.s1,
         dateFont: .caption2,
         noteFont: .caption,

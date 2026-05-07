@@ -117,17 +117,9 @@ struct MomentComparisonView: View {
             return CGFloat(templatePhotoAspectRatio)
         }
 
-        if album.ratio != nil {
-            return MomentPhotoLayoutResolver.displayAspectRatio(
-                imageSize: nil,
-                albumRatio: album.ratio,
-                photoOrientation: leadingMoment.photoOrientation
-            )
-        }
-
         return MomentPhotoLayoutResolver.displayAspectRatio(
             imageSize: nil,
-            albumRatio: nil,
+            albumRatio: album.ratio,
             photoOrientation: leadingMoment.photoOrientation
         )
     }

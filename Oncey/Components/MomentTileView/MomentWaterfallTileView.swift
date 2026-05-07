@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct MomentTileView: View {
+struct MomentWaterfallTileView: View {
     let moment: Moment
     let monthDayText: String
     let albumNameText: String
@@ -73,22 +73,18 @@ struct MomentTileView: View {
     }
 
     private var coverImage: some View {
-        LocalPhotoView(path: resolvedPhotoPath)
+        LocalPhotoView(path: moment.photo)
         .frame(maxWidth: .infinity)
         .aspectRatio(resolvedCoverAspectRatio, contentMode: .fit)
         .clipped()
     }
 
-    private var resolvedPhotoPath: String? {
-        moment.photo.isEmpty ? nil : moment.photo
-    }
-
-        private var resolvedCoverSourceSize: CGSize {
-            MomentPhotoLayoutResolver.displaySourceSize(
-                imageSize: resolvedImageSize,
-                albumRatio: moment.album?.ratio,
-                photoOrientation: moment.photoOrientation
-            )
+    private var resolvedCoverSourceSize: CGSize {
+        MomentPhotoLayoutResolver.displaySourceSize(
+            imageSize: resolvedImageSize,
+            albumRatio: moment.album?.ratio,
+            photoOrientation: moment.photoOrientation
+        )
     }
 
     private var resolvedCoverAspectRatio: CGFloat {
@@ -96,13 +92,9 @@ struct MomentTileView: View {
         return sourceSize.width / sourceSize.height
     }
 
-        private var resolvedImageSize: CGSize? {
-            guard let resolvedPhotoPath else {
-                return nil
-            }
-
-            return ImageResourceService.imageSize(from: resolvedPhotoPath)
-        }
+    private var resolvedImageSize: CGSize? {
+        return ImageResourceService.imageSize(from: moment.photo)
+    }
 }
 
 #Preview {
@@ -114,7 +106,7 @@ struct MomentTileView: View {
         createdAt: .now.addingTimeInterval(-86_400)
     )
 
-    MomentTileView(
+    MomentWaterfallTileView(
         moment: moment,
         monthDayText: "Apr 29",
         albumNameText: album.name

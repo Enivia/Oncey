@@ -69,7 +69,8 @@ struct MomentShareView: View {
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.s6)
-            .padding(.vertical, AppTheme.Spacing.s4)
+            .padding(.top, AppTheme.Spacing.s8)
+            .padding(.bottom, AppTheme.Spacing.s2)
         }
         .background(AppTheme.Colors.surface)
         .overlay(alignment: .top) {
@@ -85,15 +86,10 @@ struct MomentShareView: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 MomentCardView(moment: moment, style: style, renderMode: .thumbnail)
-                    .frame(width: 120)
+                    .frame(width: 100)
             }
             .padding(AppTheme.Spacing.s2)
             .background(selectedStyle == style ? AppTheme.Colors.accentSoft : AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous)
-                    .stroke(selectedStyle == style ? AppTheme.Colors.accentStroke : AppTheme.Colors.border, lineWidth: selectedStyle == style ? 2 : 1)
-            }
         }
         .buttonStyle(.plain)
     }
