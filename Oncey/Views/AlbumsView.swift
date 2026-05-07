@@ -69,6 +69,15 @@ struct AlbumsView: View {
             }
         }
         .toolbar {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                NavigationLink {
+                    MomentsView()
+                } label: {
+                    Image(systemName: "photo.on.rectangle.angled")
+                }
+                .accessibilityLabel("Open moments")
+            }
+            
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isCreationPresented = true
