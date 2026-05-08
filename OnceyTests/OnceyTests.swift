@@ -403,7 +403,14 @@ struct OnceyTests {
         let context = ModelContext(container)
         let createdAt = Date(timeIntervalSince1970: 1_713_744_000)
         let remindAt = Date(timeIntervalSince1970: 1_716_336_000)
+        let deletedAt = Date(timeIntervalSince1970: 1_713_751_200)
         let photoPath = try AppImageStore.store(makeImage(color: .systemPurple))
+
+        final class Recorder: @unchecked Sendable {
+            var removedIdentifiers: [[String]] = []
+        }
+
+        let recorder = Recorder()
 
         let album = Album(
             name: "Reset Ratio",
@@ -426,7 +433,16 @@ struct OnceyTests {
         context.insert(moment)
         try context.save()
 
-        try MomentDeletionService.delete([moment], in: context)
+        try MomentDeletionService.delete(
+            [moment],
+            in: context,
+            updatedAt: deletedAt,
+            reminderClient: AlbumReminderClient(
+                requestAuthorization: { true },
+                addRequest: { _ in },
+                removeRequests: { identifiers in recorder.removedIdentifiers.append(identifiers) }
+            )
+        )
 
         let fetchedAlbums = try context.fetch(FetchDescriptor<Album>())
         let fetchedMoments = try context.fetch(FetchDescriptor<Moment>())
@@ -436,7 +452,41 @@ struct OnceyTests {
         #expect(fetchedAlbums.first?.ratio == nil)
         #expect(fetchedAlbums.first?.remindValue == 3)
         #expect(fetchedAlbums.first?.remindUnit == .month)
-        #expect(fetchedAlbums.first?.remindAt == remindAt)
+        #expect(fetchedAlbums.first?.remindAt == nil)
+        #expect(fetchedAlbums.first?.hasReminder == false)
+        #expect(fetchedAlbums.first?.hasReminderConfiguration == true)
+        #expect(fetchedAlbums.first?.updatedAt == deletedAt)
+        #expect(recorder.removedIdentifiers == [[AlbumReminderService.notificationIdentifier(for: album)]])
+    }
+
+    @Test func storingReminderConfigurationKeepsPendingReminderWithoutDate() {
+        let album = Album(name: "Reminder Draft")
+        let updatedAt = Date(timeIntervalSince1970: 1_713_744_000)
+
+        final class Recorder: @unchecked Sendable {
+            var removedIdentifiers: [[String]] = []
+        }
+
+        let recorder = Recorder()
+        AlbumReminderService.storeReminderConfiguration(
+            on: album,
+            value: 2,
+            unit: .week,
+            updatedAt: updatedAt,
+            client: AlbumReminderClient(
+                requestAuthorization: { true },
+                addRequest: { _ in },
+                removeRequests: { identifiers in recorder.removedIdentifiers.append(identifiers) }
+            )
+        )
+
+        #expect(album.remindValue == 2)
+        #expect(album.remindUnit == .week)
+        #expect(album.remindAt == nil)
+        #expect(album.hasReminder == false)
+        #expect(album.hasReminderConfiguration == true)
+        #expect(album.updatedAt == updatedAt)
+        #expect(recorder.removedIdentifiers == [[AlbumReminderService.notificationIdentifier(for: album)]])
     }
 
     @Test func reminderDateCalculationSupportsAllUnits() {
@@ -459,6 +509,29 @@ struct OnceyTests {
             AlbumReminderService.reminderDate(from: baseDate, value: 1, unit: .year, calendar: calendar)
             == calendar.date(byAdding: .year, value: 1, to: baseDate)
         )
+    }
+
+    @Test func storingReminderUsesReminderBaseDateWithoutOverwritingAlbumUpdatedAt() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let album = Album(name: "Reminder Timestamp")
+        let baseDate = Date(timeIntervalSince1970: 1_713_744_000)
+        let updatedAt = Date(timeIntervalSince1970: 1_716_336_000)
+        let expectedReminderDate = try #require(
+            AlbumReminderService.reminderDate(from: baseDate, value: 1, unit: .month, calendar: calendar)
+        )
+
+        let remindAt = try AlbumReminderService.storeReminder(
+            on: album,
+            value: 1,
+            unit: .month,
+            baseDate: baseDate,
+            updatedAt: updatedAt,
+            calendar: calendar
+        )
+
+        #expect(remindAt == expectedReminderDate)
+        #expect(album.remindAt == expectedReminderDate)
+        #expect(album.updatedAt == updatedAt)
     }
 
     @Test func applyingReminderSchedulesNotificationWhenAuthorized() async throws {

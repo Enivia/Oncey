@@ -14,6 +14,7 @@ struct AlbumMomentsView: View {
     @State private var isCreationPresented = false
     @State private var pendingNoteEditorInput: TimelinePendingNoteEditorInput?
     @State private var pendingShareInput: TimelinePendingShareInput?
+    @State private var isReminderEditorPresented = false
     @State private var currentMomentID: UUID?
     @State private var pendingSingleDeleteMoment: Moment?
     @State private var errorTitle = "Couldn't load photo"
@@ -83,8 +84,16 @@ struct AlbumMomentsView: View {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $isReminderEditorPresented) {
+            NavigationStack {
+                AlbumReminderEditorSheet(album: album)
+            }
+            .presentationDetents([.medium])
+        }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                reminderToolbarButton
+
                 Button {
                     isCreationPresented = true
                 } label: {
@@ -139,6 +148,26 @@ struct AlbumMomentsView: View {
             metrics: metrics,
             isCurrent: isCurrent(moment)
         )
+    }
+
+    private var reminderSymbolName: String {
+        album.hasReminderConfiguration ? "bell.fill" : "bell"
+    }
+
+    @ViewBuilder
+    private var reminderToolbarButton: some View {
+        let button = Button {
+            isReminderEditorPresented = true
+        } label: {
+            Image(systemName: reminderSymbolName)
+        }
+        .accessibilityLabel("Edit reminder")
+
+        if album.hasReminderConfiguration {
+            button.foregroundStyle(AppTheme.Colors.accent)
+        } else {
+            button
+        }
     }
 
     private var isPresentingSingleDeleteAlert: Binding<Bool> {

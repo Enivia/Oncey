@@ -2,7 +2,12 @@ import Foundation
 import SwiftData
 
 enum MomentDeletionService {
-    static func delete(_ moments: [Moment], in modelContext: ModelContext) throws {
+    static func delete(
+        _ moments: [Moment],
+        in modelContext: ModelContext,
+        updatedAt: Date = .now,
+        reminderClient: AlbumReminderClient = AlbumReminderClient.live()
+    ) throws {
         guard !moments.isEmpty else {
             return
         }
@@ -16,19 +21,42 @@ enum MomentDeletionService {
 
         try modelContext.save()
 
-        var clearedAlbumRatio = false
+        var updatedAlbums = false
+        var albumsToUnscheduleReminder: [Album] = []
         for album in albumsToCheck where album.moments.isEmpty {
-            guard album.ratio != nil else {
-                continue
+            var didUpdateAlbum = false
+
+            if album.ratio != nil {
+                album.ratio = nil
+                didUpdateAlbum = true
             }
 
-            album.ratio = nil
-            album.updatedAt = .now
-            clearedAlbumRatio = true
+            if album.hasReminder,
+               let remindValue = album.remindValue,
+               let remindUnit = album.remindUnit {
+                AlbumReminderService.storeReminderConfiguration(
+                    on: album,
+                    value: remindValue,
+                    unit: remindUnit,
+                    updatedAt: updatedAt,
+                    removesScheduledReminder: false,
+                    client: reminderClient
+                )
+                albumsToUnscheduleReminder.append(album)
+                didUpdateAlbum = true
+            } else if didUpdateAlbum {
+                album.updatedAt = updatedAt
+            }
+
+            updatedAlbums = updatedAlbums || didUpdateAlbum
         }
 
-        if clearedAlbumRatio {
+        if updatedAlbums {
             try modelContext.save()
+        }
+
+        for album in albumsToUnscheduleReminder {
+            AlbumReminderService.removeScheduledReminder(for: album, client: reminderClient)
         }
 
         for path in photoPaths {

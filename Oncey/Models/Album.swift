@@ -52,8 +52,12 @@ final class Album {
 }
 
 extension Album {
+    var hasReminderConfiguration: Bool {
+        remindValue != nil && remindUnit != nil
+    }
+
     var hasReminder: Bool {
-        remindValue != nil && remindUnit != nil && remindAt != nil
+        hasReminderConfiguration && remindAt != nil
     }
 
     var templatePhotoSize: CGSize? {

@@ -452,7 +452,6 @@ struct CreationView: View {
                     reduceMotion: reduceMotion,
                     reminderValue: $reminderValue,
                     reminderUnit: $reminderUnit,
-                    reminderDateText: configurationReminderText,
                     onSkip: {
                         Task {
                             await completeCreation(using: .skip)
@@ -684,7 +683,7 @@ struct CreationView: View {
 
             if captureChrome.showsCaptureControls {
                 VStack(spacing: 0) {
-                     Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
                     captureBottomBar
                         .padding(.horizontal, AppTheme.Spacing.s5)
@@ -1113,14 +1112,6 @@ struct CreationView: View {
         case .newMoment(let album):
             return album.moments.isEmpty && album.ratio == nil
         }
-    }
-
-    private var configurationReminderText: String {
-        guard let date = AlbumReminderService.reminderDate(from: .now, value: reminderValue, unit: reminderUnit) else {
-            return "another time"
-        }
-
-        return AppDateFormatters.momentTimestamp.string(from: date)
     }
 
     private func updateCameraLifecycle(for step: MomentCreationScreenStep) {

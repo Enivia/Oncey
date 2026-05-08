@@ -7,7 +7,6 @@ struct ReminderStepView: View {
     let reduceMotion: Bool
     @Binding var reminderValue: Int
     @Binding var reminderUnit: AlbumReminderUnit
-    let reminderDateText: String
     let onSkip: () -> Void
     let onDeal: () -> Void
 
@@ -21,35 +20,27 @@ struct ReminderStepView: View {
                         reduceMotion: reduceMotion
                     )
 
-                HStack(spacing: AppTheme.Spacing.s3) {
-                    Picker("Value", selection: $reminderValue) {
-                        ForEach(1...30, id: \.self) { value in
-                            Text("\(value)").tag(value)
-                        }
+                AlbumReminderConfigurationContent(
+                    reminderValue: $reminderValue,
+                    reminderUnit: $reminderUnit,
+                    reminderBaseDate: .now,
+                    pickerWrapper: { section in
+                        AnyView(
+                            section.momentCreationTransitionPhase(
+                                phase(for: .reminderPicker),
+                                reduceMotion: reduceMotion
+                            )
+                        )
+                    },
+                    descriptionWrapper: { section in
+                        AnyView(
+                            section.momentCreationTransitionPhase(
+                                phase(for: .reminderDescription),
+                                reduceMotion: reduceMotion
+                            )
+                        )
                     }
-                    .pickerStyle(.wheel)
-
-                    Picker("Unit", selection: $reminderUnit) {
-                        ForEach(AlbumReminderUnit.allCases) { unit in
-                            Text(unit.title).tag(unit)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                }
-                .frame(height: 160)
-                .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg, style: .continuous))
-                .momentCreationTransitionPhase(
-                    phase(for: .reminderPicker),
-                    reduceMotion: reduceMotion
                 )
-
-                Text("I’ll remind you to come back on \(reminderDateText)")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .momentCreationTransitionPhase(
-                        phase(for: .reminderDescription),
-                        reduceMotion: reduceMotion
-                    )
 
                 VStack(spacing: AppTheme.Spacing.s5) {
                     Button(action: onDeal) {
@@ -62,7 +53,7 @@ struct ReminderStepView: View {
                         phase(for: .reminderPrimaryButton),
                         reduceMotion: reduceMotion
                     )
-                    
+
                     Button(action: onSkip) {
                         Label("No Reminder", systemImage: "bell.slash")
                             .frame(maxWidth: .infinity)
@@ -99,7 +90,6 @@ private struct MomentCreationReminderStepPreview: View {
             reduceMotion: false,
             reminderValue: $reminderValue,
             reminderUnit: $reminderUnit,
-            reminderDateText: AppDateFormatters.momentTimestamp.string(from: Date.now.addingTimeInterval(60 * 60 * 24 * 90)),
             onSkip: {},
             onDeal: {}
         )

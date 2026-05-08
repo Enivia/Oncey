@@ -7,6 +7,7 @@ struct AlbumsView: View {
     @State private var viewModel = AlbumsViewModel()
     @State private var isCreationPresented = false
     @State private var reminderCreationTarget: ReminderCreationTarget?
+    @State private var reminderEditorTarget: ReminderEditorTarget?
     @State private var pendingTimelineAlbumID: UUID?
     @State private var pendingDeleteAlbum: Album?
     @State private var errorTitle = "Couldn't delete album"
@@ -54,6 +55,17 @@ struct AlbumsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
+                                    Button {
+                                        reminderEditorTarget = ReminderEditorTarget(id: album.id)
+                                    } label: {
+                                        if album.hasReminderConfiguration {
+                                            Label("Reminder", systemImage: reminderSymbolName(for: album))
+                                                .foregroundStyle(AppTheme.Colors.accent)
+                                        } else {
+                                            Label("Reminder", systemImage: reminderSymbolName(for: album))
+                                        }
+                                    }
+
                                     Button(role: .destructive) {
                                         pendingDeleteAlbum = album
                                     } label: {
@@ -110,6 +122,16 @@ struct AlbumsView: View {
                 EmptyView()
             }
         }
+        .sheet(item: $reminderEditorTarget) { target in
+            if let album = albums.first(where: { $0.id == target.id }) {
+                NavigationStack {
+                    AlbumReminderEditorSheet(album: album)
+                }
+                .presentationDetents([.medium])
+            } else {
+                EmptyView()
+            }
+        }
         .alert("Delete this album?", isPresented: isPresentingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 guard let pendingDeleteAlbum else {
@@ -136,6 +158,10 @@ struct AlbumsView: View {
 
     private var reminderAlbum: Album? {
         viewModel.nextReminderAlbum(in: albums)
+    }
+
+    private func reminderSymbolName(for album: Album) -> String {
+        album.hasReminderConfiguration ? "bell.fill" : "bell"
     }
 
     private var pendingTimelineAlbum: Album? {
@@ -180,6 +206,10 @@ struct AlbumsView: View {
 }
 
 private struct ReminderCreationTarget: Identifiable {
+    let id: UUID
+}
+
+private struct ReminderEditorTarget: Identifiable {
     let id: UUID
 }
 

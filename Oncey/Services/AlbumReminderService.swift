@@ -57,6 +57,7 @@ enum AlbumReminderService {
         value: Int,
         unit: AlbumReminderUnit,
         baseDate: Date = .now,
+        updatedAt: Date? = nil,
         calendar: Calendar = .current
     ) throws -> Date {
         guard let remindAt = reminderDate(from: baseDate, value: value, unit: unit, calendar: calendar) else {
@@ -66,8 +67,26 @@ enum AlbumReminderService {
         album.remindValue = value
         album.remindUnit = unit
         album.remindAt = remindAt
-        album.updatedAt = baseDate
+        album.updatedAt = updatedAt ?? baseDate
         return remindAt
+    }
+
+    static func storeReminderConfiguration(
+        on album: Album,
+        value: Int,
+        unit: AlbumReminderUnit,
+        updatedAt: Date = .now,
+        removesScheduledReminder: Bool = true,
+        client: AlbumReminderClient = AlbumReminderClient.live()
+    ) {
+        album.remindValue = value
+        album.remindUnit = unit
+        album.remindAt = nil
+        album.updatedAt = updatedAt
+
+        if removesScheduledReminder {
+            removeScheduledReminder(for: album, client: client)
+        }
     }
 
     static func applyReminder(
@@ -75,10 +94,18 @@ enum AlbumReminderService {
         value: Int,
         unit: AlbumReminderUnit,
         baseDate: Date = .now,
+        updatedAt: Date? = nil,
         calendar: Calendar = .current,
         client: AlbumReminderClient = AlbumReminderClient.live()
     ) async throws -> AlbumReminderScheduleOutcome {
-        try storeReminder(on: album, value: value, unit: unit, baseDate: baseDate, calendar: calendar)
+        try storeReminder(
+            on: album,
+            value: value,
+            unit: unit,
+            baseDate: baseDate,
+            updatedAt: updatedAt,
+            calendar: calendar
+        )
         return try await scheduleStoredReminder(for: album, client: client)
     }
 
