@@ -36,6 +36,8 @@ final class CameraSessionController: NSObject, ObservableObject {
     @Published private(set) var isSessionConfigured = false
     @Published private(set) var isRunning = false
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
+    @Published private(set) var previewRotationAngle: CGFloat = CameraPreviewRotationResolver.resolve(captureRotationAngle: 90)
+    @Published private(set) var videoRotationAngle: CGFloat = 90
     @Published private(set) var errorMessage: String?
     @Published var isFlashEnabled = false
 
@@ -54,6 +56,9 @@ final class CameraSessionController: NSObject, ObservableObject {
     private var videoInput: AVCaptureDeviceInput?
     private var captureCompletion: ((Result<UIImage, Error>) -> Void)?
     private var isConfigured = false
+    private var captureVideoRotationAngle: CGFloat = 90
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var captureRotationObservation: NSKeyValueObservation?
 
     func activate() {
         let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -120,10 +125,7 @@ final class CameraSessionController: NSObject, ObservableObject {
                 settings.flashMode = .off
             }
 
-            if let connection = self.photoOutput.connection(with: .video),
-               connection.isVideoRotationAngleSupported(90) {
-                connection.videoRotationAngle = 90
-            }
+            self.applyCaptureRotationAngle(self.captureVideoRotationAngle)
 
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
@@ -196,10 +198,8 @@ final class CameraSessionController: NSObject, ObservableObject {
             session.addOutput(photoOutput)
         }
 
-        if let connection = photoOutput.connection(with: .video),
-           connection.isVideoRotationAngleSupported(90) {
-            connection.videoRotationAngle = 90
-        }
+        updateRotationCoordinator(for: device)
+        applyCaptureRotationAngle(captureVideoRotationAngle)
 
         Task { @MainActor in
             self.currentPosition = position
@@ -230,6 +230,52 @@ final class CameraSessionController: NSObject, ObservableObject {
     private func makeDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position)
             ?? AVCaptureDevice.default(for: .video)
+    }
+
+    private func updateRotationCoordinator(for device: AVCaptureDevice) {
+        captureRotationObservation = nil
+        rotationCoordinator = nil
+
+        if #available(iOS 17.0, *) {
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+            rotationCoordinator = coordinator
+            observeRotationUpdates(with: coordinator)
+            return
+        }
+
+        updateVideoRotationAngle(90)
+    }
+
+    @available(iOS 17.0, *)
+    private func observeRotationUpdates(with coordinator: AVCaptureDevice.RotationCoordinator) {
+        captureRotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelCapture,
+            options: [.initial, .new]
+        ) { [weak self] coordinator, _ in
+            self?.updateVideoRotationAngle(coordinator.videoRotationAngleForHorizonLevelCapture)
+        }
+    }
+
+    private func updateVideoRotationAngle(_ angle: CGFloat) {
+        sessionQueue.async {
+            self.applyCaptureRotationAngle(angle)
+
+            Task { @MainActor in
+                self.videoRotationAngle = angle
+                self.previewRotationAngle = CameraPreviewRotationResolver.resolve(captureRotationAngle: angle)
+            }
+        }
+    }
+
+    private func applyCaptureRotationAngle(_ angle: CGFloat) {
+        captureVideoRotationAngle = angle
+
+        guard let connection = photoOutput.connection(with: .video),
+              connection.isVideoRotationAngleSupported(angle) else {
+            return
+        }
+
+        connection.videoRotationAngle = angle
     }
 
     private func finishCapture(with result: Result<UIImage, Error>) {

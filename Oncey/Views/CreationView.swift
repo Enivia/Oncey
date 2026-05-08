@@ -645,17 +645,37 @@ struct CreationView: View {
         if let captureDraft {
             capturePreviewImageStage(captureDraft, layout: layout)
         } else if camera.authorizationState == .authorized, camera.isSessionConfigured {
-            CameraPreviewView(session: camera.session)
+            CameraPreviewView(
+                session: camera.session,
+                videoRotationAngle: camera.previewRotationAngle
+            )
                 .frame(width: layout.frameRect.width, height: layout.frameRect.height)
                 .overlay {
                     Rectangle()
                         .stroke(.white.opacity(0.18), lineWidth: 1)
                 }
-                .overlay {
-                    if let latestMomentPhotoPath, latestMomentPhotoPath.isEmpty == false {
+                .overlay(alignment: .topLeading) {
+                    if let latestMomentPhotoPath,
+                       latestMomentPhotoPath.isEmpty == false,
+                       let overlayLayout = latestMomentOverlayLayout(in: layout.frameRect.size) {
                         LocalPhotoView(path: latestMomentPhotoPath)
-                            .frame(width: layout.frameRect.width, height: layout.frameRect.height)
+                            .scaledToFill()
+                            .frame(
+                                width: overlayLayout.contentSize.width,
+                                height: overlayLayout.contentSize.height
+                            )
+                            .rotationEffect(.degrees(overlayLayout.rotationDegrees))
+                            .frame(
+                                width: overlayLayout.frame.width,
+                                height: overlayLayout.frame.height
+                            )
+                            .clipped()
+                            .offset(
+                                x: overlayLayout.frame.minX,
+                                y: overlayLayout.frame.minY
+                            )
                             .opacity(overlayOpacity)
+                            .allowsHitTesting(false)
                     }
                 }
         } else {
@@ -1036,8 +1056,6 @@ struct CreationView: View {
     }
 
     private func capturePhoto() {
-        let targetOrientation = currentCameraCaptureOrientation
-
         guard cameraCaptureState.beginCapture() else {
             return
         }
@@ -1049,6 +1067,10 @@ struct CreationView: View {
             case .success(let image):
                 cameraCaptureState.finishCapture()
                 let draft = setCaptureDraft(image, source: .camera)
+                let targetOrientation = MomentCreationPhotoOrientationResolver.resolve(
+                    albumOrientation: mode.album?.orientation,
+                    imageSize: image.size
+                )
                 prepareCameraImage(image, targetOrientation: targetOrientation, matching: draft.id)
             case .failure(let error):
                 cameraCaptureState.finishCapture()
@@ -1259,6 +1281,15 @@ struct CreationView: View {
 
     private func imagePreviewSize(for image: UIImage, in containerSize: CGSize) -> CGSize {
         CameraGeometry.fittedSize(for: image.size, in: containerSize)
+    }
+
+    @MainActor
+    private func latestMomentOverlayLayout(in previewSize: CGSize) -> MomentCreationLiveOverlayLayout? {
+        MomentCreationLiveOverlayLayoutResolver.resolve(
+            imageSize: latestMomentPhotoPath.flatMap(ImageResourceService.imageSize(from:)),
+            albumOrientation: latestMoment?.album?.orientation ?? mode.album?.orientation,
+            previewSize: previewSize
+        )
     }
 
     private func exportPreparedImage(using layout: MomentCreationCaptureLayout) -> UIImage {
@@ -1692,11 +1723,17 @@ struct CreationView: View {
     }
 
     private var currentCameraCaptureOrientation: MomentPhotoOrientation {
-        mode.album?.orientation ?? .portrait
+        MomentCreationPhotoOrientationResolver.resolve(
+            albumOrientation: mode.album?.orientation,
+            imageSize: captureDraft?.source == .camera ? captureDraft?.image.size : nil
+        )
     }
 
     private func targetPhotoOrientation(for image: UIImage) -> MomentPhotoOrientation {
-        mode.album?.orientation ?? .inferred(from: image.size)
+        MomentCreationPhotoOrientationResolver.resolve(
+            albumOrientation: mode.album?.orientation,
+            imageSize: image.size
+        )
     }
 
     private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
