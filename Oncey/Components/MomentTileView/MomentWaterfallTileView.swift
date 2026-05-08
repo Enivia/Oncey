@@ -82,8 +82,7 @@ struct MomentWaterfallTileView: View {
     private var resolvedCoverSourceSize: CGSize {
         MomentPhotoLayoutResolver.displaySourceSize(
             imageSize: resolvedImageSize,
-            albumRatio: moment.album?.ratio,
-            photoOrientation: moment.photoOrientation
+            albumOrientation: moment.album?.orientation
         )
     }
 

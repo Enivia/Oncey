@@ -11,7 +11,7 @@ import SwiftData
 final class Album {
     @Attribute(.unique) var id: UUID
     var name: String
-    var ratio: CameraCaptureAspect?
+    var orientation: MomentPhotoOrientation?
     var remindValue: Int?
     var remindUnit: AlbumReminderUnit?
     var remindAt: Date?
@@ -22,7 +22,7 @@ final class Album {
     init(
         id: UUID = UUID(),
         name: String,
-        ratio: CameraCaptureAspect? = nil,
+        orientation: MomentPhotoOrientation? = nil,
         remindValue: Int? = nil,
         remindUnit: AlbumReminderUnit? = nil,
         remindAt: Date? = nil,
@@ -32,7 +32,7 @@ final class Album {
     ) {
         self.id = id
         self.name = name
-        self.ratio = ratio
+        self.orientation = orientation
         self.remindValue = remindValue
         self.remindUnit = remindUnit
         self.remindAt = remindAt
@@ -43,6 +43,33 @@ final class Album {
 }
 
 extension Album {
+    var earliestMomentForOrientation: Moment? {
+        moments.min { lhs, rhs in
+            if lhs.createdAt != rhs.createdAt {
+                return lhs.createdAt < rhs.createdAt
+            }
+
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
+
+    @discardableResult
+    func syncOrientation(
+        imageSizeResolver: (String) -> CGSize? = ImageResourceService.imageSize(from:)
+    ) -> MomentPhotoOrientation? {
+        guard let earliestMomentForOrientation else {
+            orientation = nil
+            return nil
+        }
+
+        let resolvedOrientation = MomentPhotoOrientation.inferred(
+            fromPhotoPath: earliestMomentForOrientation.photo,
+            imageSizeResolver: imageSizeResolver
+        )
+        orientation = resolvedOrientation
+        return orientation
+    }
+
     var hasReminderConfiguration: Bool {
         remindValue != nil && remindUnit != nil
     }

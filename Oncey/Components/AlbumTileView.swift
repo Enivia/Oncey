@@ -101,31 +101,6 @@ struct AlbumTileView: View {
         .frame(maxWidth: .infinity)
         .aspectRatio(4 / 3, contentMode: .fit)
     }
-
-    private var resolvedCoverImageSize: CGSize? {
-        guard let coverPhotoPath else {
-            return nil
-        }
-
-        return ImageResourceService.imageSize(from: coverPhotoPath)
-    }
-
-    private var resolvedCoverPhotoOrientation: MomentPhotoOrientation {
-        if let coverPhotoPath,
-           let matchingMoment = album.moments.first(where: { $0.photo == coverPhotoPath }) {
-            return matchingMoment.photoOrientation
-        }
-
-        let latestMoment = album.moments.max { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.updatedAt < rhs.updatedAt
-            }
-
-            return lhs.createdAt < rhs.createdAt
-        }
-
-        return latestMoment?.photoOrientation ?? .portrait
-    }
 }
 
 private struct CardLayerTransform {

@@ -4,41 +4,18 @@ import Testing
 
 struct MomentPhotoLayoutResolverTests {
 
-    @Test func initialAspectPrefersAlbumRatioWhenAvailable() {
+    @Test func initialAspectStaysInThreeByFourFamily() {
         #expect(
             MomentPhotoLayoutResolver.initialAspect(
-                albumRatio: .square,
-                templatePhotoSize: CGSize(width: 1600, height: 900),
                 latestMomentPhotoSize: CGSize(width: 900, height: 1200)
-            ) == .square
+            ) == .threeByFour
         )
     }
 
-    @Test func initialAspectTreatsLandscapeTemplateAsSameAspectFamily() {
-        #expect(
-            MomentPhotoLayoutResolver.initialAspect(
-                albumRatio: nil,
-                templatePhotoSize: CGSize(width: 1600, height: 900),
-                latestMomentPhotoSize: nil
-            ) == .nineBySixteen
-        )
-    }
-
-    @Test func initialOrientationPrefersStoredMomentOrientation() {
+    @Test func initialOrientationPrefersAlbumOrientationWhenAvailable() {
         #expect(
             MomentPhotoLayoutResolver.initialOrientation(
-                templatePhotoSize: CGSize(width: 900, height: 1200),
-                latestMomentPhotoOrientation: .landscape,
-                latestMomentPhotoSize: CGSize(width: 900, height: 1200)
-            ) == .landscape
-        )
-    }
-
-    @Test func initialOrientationFallsBackToTemplatePhotoSize() {
-        #expect(
-            MomentPhotoLayoutResolver.initialOrientation(
-                templatePhotoSize: CGSize(width: 1600, height: 900),
-                latestMomentPhotoOrientation: nil,
+                albumOrientation: .landscape,
                 latestMomentPhotoSize: CGSize(width: 900, height: 1200)
             ) == .landscape
         )
@@ -47,8 +24,7 @@ struct MomentPhotoLayoutResolverTests {
     @Test func initialOrientationFallsBackToLatestMomentPhotoSize() {
         #expect(
             MomentPhotoLayoutResolver.initialOrientation(
-                templatePhotoSize: nil,
-                latestMomentPhotoOrientation: nil,
+                albumOrientation: nil,
                 latestMomentPhotoSize: CGSize(width: 1600, height: 900)
             ) == .landscape
         )
@@ -58,19 +34,26 @@ struct MomentPhotoLayoutResolverTests {
         #expect(
             MomentPhotoLayoutResolver.displayAspectRatio(
                 imageSize: CGSize(width: 1600, height: 900),
-                albumRatio: .threeByFour,
-                photoOrientation: .portrait
+                albumOrientation: .portrait
             ) == 1600 / 900
         )
     }
 
-    @Test func displayAspectRatioFallsBackToLandscapeAlbumRatio() {
+    @Test func displayAspectRatioFallsBackToLandscapeAlbumOrientation() {
         #expect(
             MomentPhotoLayoutResolver.displayAspectRatio(
                 imageSize: nil,
-                albumRatio: .threeByFour,
-                photoOrientation: .landscape
+                albumOrientation: .landscape
             ) == 4 / 3
+        )
+    }
+
+    @Test func displaySourceSizeFallsBackToPortraitThreeByFour() {
+        #expect(
+            MomentPhotoLayoutResolver.displaySourceSize(
+                imageSize: nil,
+                albumOrientation: nil
+            ) == CGSize(width: 3 / 4, height: 1)
         )
     }
 }

@@ -93,8 +93,7 @@ struct AlbumMomentTileView: View {
     private var resolvedPhotoSourceSize: CGSize {
         MomentPhotoLayoutResolver.displaySourceSize(
             imageSize: ImageResourceService.imageSize(from: moment.photo),
-            albumRatio: moment.album?.ratio,
-            photoOrientation: moment.photoOrientation
+            albumOrientation: moment.album?.orientation
         )
     }
 }

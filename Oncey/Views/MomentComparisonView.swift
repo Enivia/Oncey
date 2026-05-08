@@ -114,8 +114,7 @@ struct MomentComparisonView: View {
 
         return MomentPhotoLayoutResolver.displayAspectRatio(
             imageSize: nil,
-            albumRatio: album.ratio,
-            photoOrientation: leadingMoment.photoOrientation
+            albumOrientation: album.orientation
         )
     }
 }

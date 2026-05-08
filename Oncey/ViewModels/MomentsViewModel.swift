@@ -206,16 +206,14 @@ struct MomentsViewModel {
 
         return MomentPhotoLayoutResolver.displaySourceSize(
             imageSize: ImageResourceService.imageSize(from: moment.photo),
-            albumRatio: moment.album?.ratio,
-            photoOrientation: moment.photoOrientation
+            albumOrientation: moment.album?.orientation
         )
     }
 
     private static func fallbackPhotoSize(for moment: Moment) -> CGSize {
         MomentPhotoLayoutResolver.displaySourceSize(
             imageSize: nil,
-            albumRatio: moment.album?.ratio,
-            photoOrientation: moment.photoOrientation
+            albumOrientation: moment.album?.orientation
         )
     }
 }

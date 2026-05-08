@@ -21,4 +21,17 @@ enum MomentPhotoOrientation: String, Codable, Sendable {
 
         return .landscape
     }
+
+    static func inferred(
+        fromPhotoPath photoPath: String,
+        imageSizeResolver: (String) -> CGSize? = ImageResourceService.imageSize(from:)
+    ) -> Self? {
+        guard let size = imageSizeResolver(photoPath),
+              size.width > 0,
+              size.height > 0 else {
+            return nil
+        }
+
+        return inferred(from: size)
+    }
 }

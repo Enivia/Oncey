@@ -161,7 +161,7 @@ struct TimelineViewModelTests {
             imageSizeResolver: { _ in nil }
         )
 
-        #expect(estimatedHeight == 166)
+        #expect(estimatedHeight == 236)
     }
 
     private func makeMoment(album: Album, createdAt: Date, updatedAt: Date, note: String = "") -> Moment {

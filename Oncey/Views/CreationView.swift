@@ -74,7 +74,6 @@ enum MomentCreationCaptureLeadingAction: Equatable {
 struct MomentCreationCaptureChromeState: Equatable {
     let leadingAction: MomentCreationCaptureLeadingAction
     let showsFlash: Bool
-    let showsAspectButton: Bool
     let showsConfirmButton: Bool
     let showsMaskSlider: Bool
     let showsCaptureControls: Bool
@@ -83,7 +82,6 @@ struct MomentCreationCaptureChromeState: Equatable {
 enum MomentCreationCaptureChromeResolver {
     static func resolve(
         previewKind: MomentCreationCapturePreviewKind,
-        allowsAspectSelection: Bool,
         showsOverlaySlider: Bool
     ) -> MomentCreationCaptureChromeState {
         switch previewKind {
@@ -91,7 +89,6 @@ enum MomentCreationCaptureChromeResolver {
             return MomentCreationCaptureChromeState(
                 leadingAction: .close,
                 showsFlash: true,
-                showsAspectButton: allowsAspectSelection,
                 showsConfirmButton: false,
                 showsMaskSlider: showsOverlaySlider,
                 showsCaptureControls: true
@@ -100,7 +97,6 @@ enum MomentCreationCaptureChromeResolver {
             return MomentCreationCaptureChromeState(
                 leadingAction: .backToCapture,
                 showsFlash: false,
-                showsAspectButton: false,
                 showsConfirmButton: true,
                 showsMaskSlider: false,
                 showsCaptureControls: false
@@ -109,7 +105,6 @@ enum MomentCreationCaptureChromeResolver {
             return MomentCreationCaptureChromeState(
                 leadingAction: .backToCapture,
                 showsFlash: false,
-                showsAspectButton: allowsAspectSelection,
                 showsConfirmButton: true,
                 showsMaskSlider: false,
                 showsCaptureControls: false
@@ -119,29 +114,24 @@ enum MomentCreationCaptureChromeResolver {
 }
 
 struct MomentCreationCameraCaptureState: Equatable {
-    private(set) var lockedAspect: CameraCaptureAspect?
+    private(set) var isCaptureInProgress = false
 
-    var isCaptureInProgress: Bool {
-        lockedAspect != nil
-    }
-
-    mutating func beginCapture(selectedAspect: CameraCaptureAspect) -> CameraCaptureAspect? {
-        guard lockedAspect == nil else {
-            return nil
+    mutating func beginCapture() -> Bool {
+        guard isCaptureInProgress == false else {
+            return false
         }
 
-        lockedAspect = selectedAspect
-        return selectedAspect
+        isCaptureInProgress = true
+        return true
     }
 
     mutating func finishCapture() {
-        lockedAspect = nil
+        isCaptureInProgress = false
     }
 }
 
 struct MomentCreationCaptureInteractivityState: Equatable {
     let allowsFlashToggle: Bool
-    let allowsAspectToggle: Bool
     let allowsPhotoPicker: Bool
     let allowsShutter: Bool
     let allowsCameraToggle: Bool
@@ -160,7 +150,6 @@ enum MomentCreationCaptureInteractivityResolver {
 
         return MomentCreationCaptureInteractivityState(
             allowsFlashToggle: chrome.showsFlash && !isCaptureInProgress && isFlashAvailable,
-            allowsAspectToggle: chrome.showsAspectButton && !isCaptureInProgress,
             allowsPhotoPicker: captureControlsAvailable,
             allowsShutter: captureControlsAvailable && liveCameraReady,
             allowsCameraToggle: captureControlsAvailable && isCameraAuthorized
@@ -195,12 +184,6 @@ private struct MomentCreationCaptureDraft {
     let source: MomentCreationCaptureSource
 }
 
-private enum MomentCreationPreviewCropMode {
-    case none
-    case adjustable
-    case fixed(CameraCaptureAspect)
-}
-
 private struct MomentCreationPendingShareInput: Identifiable, Hashable {
     let id = UUID()
     let moment: Moment
@@ -227,6 +210,7 @@ struct CreationView: View {
         label: "Oncey.Creation.image-processing",
         qos: .userInitiated
     )
+    private static let captureControlsReservedHeight: CGFloat = 124
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -242,8 +226,6 @@ struct CreationView: View {
     @State private var currentStep: MomentCreationScreenStep = .capture
     @State private var albumName: String
     @State private var note = ""
-    @State private var selectedAspect: CameraCaptureAspect
-    @State private var selectedPhotoOrientation: MomentPhotoOrientation
     @State private var captureDraft: MomentCreationCaptureDraft?
     @State private var cachedCaptureLayout: MomentCreationCaptureLayout?
     @State private var cameraCaptureState = MomentCreationCameraCaptureState()
@@ -288,8 +270,6 @@ struct CreationView: View {
 
         let selection = Self.initialReminderSelection(for: mode)
         _albumName = State(initialValue: mode.album?.name ?? "")
-        _selectedAspect = State(initialValue: Self.initialAspect(for: mode))
-        _selectedPhotoOrientation = State(initialValue: Self.initialOrientation(for: mode))
         _reminderValue = State(initialValue: selection.value)
         _reminderUnit = State(initialValue: selection.unit)
     }
@@ -331,20 +311,6 @@ struct CreationView: View {
             }
             .onChange(of: isShowingCapturePreview) { _, _ in
                 updateCameraLifecycle(for: currentStep)
-            }
-            .onChange(of: selectedAspect) { _, _ in
-                preparedImage = nil
-
-                if isShowingInteractiveCaptureCrop {
-                    resetCaptureCropTransform()
-                }
-            }
-            .onChange(of: selectedPhotoOrientation) { _, _ in
-                preparedImage = nil
-
-                if isShowingInteractiveCaptureCrop {
-                    resetCaptureCropTransform()
-                }
             }
             .onChange(of: camera.errorMessage) { _, newValue in
                 guard let newValue else {
@@ -537,25 +503,6 @@ struct CreationView: View {
                     .accessibilityLabel(camera.isFlashEnabled ? "Flash On" : "Flash Off")
                 }
 
-                if captureChrome.showsAspectButton {
-                    Button {
-                        preparedImage = nil
-                        selectedAspect = selectedAspect.next
-                    } label: {
-                        Text(selectedAspect.label)
-                    }
-                    .disabled(!captureInteractivity.allowsAspectToggle)
-                }
-
-                if showsPhotoOrientationButton {
-                    Button {
-                        selectedPhotoOrientation = selectedPhotoOrientation.toggled
-                    } label: {
-                        Image(systemName: "rotate.right")
-                    }
-                    .accessibilityLabel("Toggle orientation")
-                }
-
                 if captureChrome.showsConfirmButton {
                     Button {
                         goForwardFromCapture(using: activeCaptureLayout)
@@ -639,12 +586,8 @@ struct CreationView: View {
         GeometryReader { proxy in
             let layout = captureLayout(in: proxy)
 
-            VStack(spacing: 0) {
-                captureStage(layout: layout)
-
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            captureStage(layout: layout)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear {
                 cachedCaptureLayout = layout
             }
@@ -677,13 +620,13 @@ struct CreationView: View {
                         .padding(.horizontal, AppTheme.Spacing.s2)
                         .padding(.bottom, AppTheme.Spacing.s2)
                 }
-                .frame(width: layout.referenceRect.width, height: layout.referenceRect.height)
-                .offset(x: layout.referenceRect.minX, y: layout.referenceRect.minY)
+                .frame(width: layout.frameRect.width, height: layout.frameRect.height)
+                .offset(x: layout.frameRect.minX, y: layout.frameRect.minY)
             }
 
             if captureChrome.showsCaptureControls {
                 VStack(spacing: 0) {
-//                    Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
                     captureBottomBar
                         .padding(.horizontal, AppTheme.Spacing.s5)
@@ -830,10 +773,6 @@ struct CreationView: View {
             .disabled(!captureInteractivity.allowsCameraToggle)
             .opacity(captureInteractivity.allowsCameraToggle ? 1 : 0.55)
         }
-    }
-
-    private var showsPhotoOrientationButton: Bool {
-        capturePreviewKind == .photoLibraryCrop && previewCropAspect != .square
     }
 
     private var isCaptureStep: Bool {
@@ -1045,39 +984,21 @@ struct CreationView: View {
     private var captureChrome: MomentCreationCaptureChromeState {
         MomentCreationCaptureChromeResolver.resolve(
             previewKind: capturePreviewKind,
-            allowsAspectSelection: allowsAspectSelection,
             showsOverlaySlider: showsOverlaySlider
         )
     }
 
-    private var previewCropMode: MomentCreationPreviewCropMode {
-        guard let captureDraft else {
-            return .none
-        }
-
-        return capturePreviewCropMode(for: captureDraft.source)
-    }
-
-    private var previewCropAspect: CameraCaptureAspect {
-        switch previewCropMode {
-        case .none, .adjustable:
-            return selectedAspect
-        case .fixed(let aspect):
-            return aspect
-        }
-    }
-
     private var isShowingInteractiveCaptureCrop: Bool {
-        switch previewCropMode {
-        case .none:
-            return false
-        case .adjustable, .fixed:
-            return true
-        }
+        captureDraft?.source == .photoLibrary
     }
 
     private var activeCaptureLayout: MomentCreationCaptureLayout {
-        cachedCaptureLayout ?? captureLayout(forStageWidth: AppTheme.Layout.screenWidth)
+        cachedCaptureLayout ?? captureLayout(
+            forAvailableSize: CGSize(
+                width: AppTheme.Layout.screenWidth,
+                height: UIScreen.main.bounds.height
+            )
+        )
     }
 
     private var isCapturingPhoto: Bool {
@@ -1106,15 +1027,6 @@ struct CreationView: View {
         latestMomentPhotoPath != nil && mode.isCreatingAlbum == false
     }
 
-    private var allowsAspectSelection: Bool {
-        switch mode {
-        case .newAlbum:
-            return true
-        case .newMoment(let album):
-            return album.moments.isEmpty && album.ratio == nil
-        }
-    }
-
     private func updateCameraLifecycle(for step: MomentCreationScreenStep) {
         if step == .capture, captureDraft == nil {
             camera.activate()
@@ -1124,7 +1036,9 @@ struct CreationView: View {
     }
 
     private func capturePhoto() {
-        guard let captureAspect = cameraCaptureState.beginCapture(selectedAspect: selectedAspect) else {
+        let targetOrientation = currentCameraCaptureOrientation
+
+        guard cameraCaptureState.beginCapture() else {
             return
         }
 
@@ -1135,7 +1049,7 @@ struct CreationView: View {
             case .success(let image):
                 cameraCaptureState.finishCapture()
                 let draft = setCaptureDraft(image, source: .camera)
-                prepareCameraImage(image, aspect: captureAspect, matching: draft.id)
+                prepareCameraImage(image, targetOrientation: targetOrientation, matching: draft.id)
             case .failure(let error):
                 cameraCaptureState.finishCapture()
                 present(error.localizedDescription)
@@ -1194,11 +1108,14 @@ struct CreationView: View {
             let moment = Moment(
                 album: album,
                 photo: photoPath,
-                photoOrientation: .inferred(from: preparedImage.size),
                 note: note,
                 createdAt: now,
                 updatedAt: now
             )
+
+            if album.orientation == nil {
+                album.orientation = .inferred(from: preparedImage.size)
+            }
 
             if album.modelContext == nil {
                 modelContext.insert(album)
@@ -1231,7 +1148,6 @@ struct CreationView: View {
         case .newAlbum:
             let album = Album(
                 name: albumName.trimmingCharacters(in: .whitespacesAndNewlines),
-                ratio: selectedAspect,
                 createdAt: now,
                 updatedAt: now
             )
@@ -1247,9 +1163,6 @@ struct CreationView: View {
 
             return album
         case .newMoment(let album):
-            if album.ratio == nil {
-                album.ratio = selectedAspect
-            }
             album.updatedAt = now
 
             if mode.showsAlbumConfigurationStep {
@@ -1309,29 +1222,36 @@ struct CreationView: View {
     }
 
     private func captureLayout(in proxy: GeometryProxy) -> MomentCreationCaptureLayout {
-        captureLayout(forStageWidth: proxy.size.width)
+        captureLayout(forAvailableSize: proxy.size)
     }
 
-    private func captureLayout(forStageWidth stageWidth: CGFloat) -> MomentCreationCaptureLayout {
-        let stageLayout = CameraGeometry.captureStageLayout(
-            stageWidth: stageWidth,
-            aspect: currentCaptureDisplayAspect,
-            orientation: currentCaptureDisplayOrientation,
-            bottomInset: AppTheme.Spacing.s2
+    private func captureLayout(forAvailableSize availableSize: CGSize) -> MomentCreationCaptureLayout {
+        let stageSize = CGSize(width: max(availableSize.width, 1), height: max(availableSize.height, 1))
+        let reservedBottomHeight = captureChrome.showsCaptureControls ? Self.captureControlsReservedHeight : 0
+        let contentHeight = max(stageSize.height - reservedBottomHeight, 1)
+        let frameSize = CameraGeometry.fittedSize(
+            for: CGSize(width: Self.targetAspectRatio(for: currentCaptureDisplayOrientation), height: 1),
+            in: CGSize(width: stageSize.width, height: contentHeight)
+        )
+        let frameRect = CGRect(
+            x: (stageSize.width - frameSize.width) / 2,
+            y: (contentHeight - frameSize.height) / 2,
+            width: frameSize.width,
+            height: frameSize.height
         )
         let previewSize = if let captureDraft, captureDraft.source == .photoLibrary {
-            imagePreviewSize(for: captureDraft.image, in: stageLayout.frameRect.size)
+            imagePreviewSize(for: captureDraft.image, in: frameRect.size)
         } else {
-            stageLayout.frameRect.size
+            frameRect.size
         }
         let cropSize = isShowingInteractiveCaptureCrop
-            ? stageLayout.frameRect.size
+            ? frameRect.size
             : .zero
 
         return MomentCreationCaptureLayout(
-            stageSize: stageLayout.stageRect.size,
-            referenceRect: stageLayout.referenceRect,
-            frameRect: stageLayout.frameRect,
+            stageSize: stageSize,
+            referenceRect: frameRect,
+            frameRect: frameRect,
             previewSize: previewSize,
             cropSize: cropSize
         )
@@ -1341,33 +1261,19 @@ struct CreationView: View {
         CameraGeometry.fittedSize(for: image.size, in: containerSize)
     }
 
-    private func capturePreviewCropMode(for source: MomentCreationCaptureSource) -> MomentCreationPreviewCropMode {
-        if source == .camera {
-            return .none
-        }
-
-        if allowsAspectSelection {
-            return .adjustable
-        }
-
-        if source == .photoLibrary, let fixedAspect = mode.album?.ratio {
-            return .fixed(fixedAspect)
-        }
-
-        return .none
-    }
-
     private func exportPreparedImage(using layout: MomentCreationCaptureLayout) -> UIImage {
         guard let captureDraft else {
             return preparedImage ?? UIImage()
         }
 
+        let targetOrientation = targetPhotoOrientation(for: captureDraft.image)
+        let targetAspectRatio = Self.targetAspectRatio(for: targetOrientation)
+
         if captureDraft.source == .camera {
-            return preparedImage ?? CameraImageCropper.croppedImage(captureDraft.image, aspect: selectedAspect)
+            return preparedImage ?? CameraImageCropper.croppedImage(captureDraft.image, aspectRatio: targetAspectRatio)
         }
 
-        switch previewCropMode {
-        case .adjustable, .fixed:
+        if isShowingInteractiveCaptureCrop {
             return CameraImageCropper.croppedImage(
                 captureDraft.image,
                 previewSize: layout.previewSize,
@@ -1375,18 +1281,15 @@ struct CreationView: View {
                 zoomScale: captureCropZoomScale,
                 offset: captureCropOffset
             )
-        case .none:
-            return captureDraft.image
         }
+
+        return captureDraft.image
     }
 
     @discardableResult
     private func setCaptureDraft(_ image: UIImage, source: MomentCreationCaptureSource) -> MomentCreationCaptureDraft {
         let draft = MomentCreationCaptureDraft(image: image, source: source)
         captureDraft = draft
-        selectedPhotoOrientation = source == .photoLibrary
-            ? MomentPhotoOrientation.inferred(from: image.size)
-            : .portrait
         preparedImage = nil
         resetCaptureCropTransform()
         return draft
@@ -1394,7 +1297,6 @@ struct CreationView: View {
 
     private func resetCaptureDraft() {
         captureDraft = nil
-        selectedPhotoOrientation = Self.initialOrientation(for: mode)
         preparedImage = nil
         isCaptureFlashVisible = false
         cameraCaptureState.finishCapture()
@@ -1410,11 +1312,14 @@ struct CreationView: View {
 
     private func prepareCameraImage(
         _ image: UIImage,
-        aspect: CameraCaptureAspect,
+        targetOrientation: MomentPhotoOrientation,
         matching draftID: UUID
     ) {
         Self.imageProcessingQueue.async {
-            let preparedImage = CameraImageCropper.croppedImage(image, aspect: aspect)
+            let preparedImage = CameraImageCropper.croppedImage(
+                image,
+                aspectRatio: Self.targetAspectRatio(for: targetOrientation)
+            )
 
             Task { @MainActor in
                 guard captureDraft?.id == draftID else {
@@ -1772,22 +1677,26 @@ struct CreationView: View {
         selectedPhotoItem = nil
     }
 
-    private var currentCaptureDisplayAspect: CameraCaptureAspect {
-        switch captureDraft?.source {
-        case .photoLibrary:
-            return previewCropAspect
-        case .camera, .none:
-            return selectedAspect
-        }
-    }
-
     private var currentCaptureDisplayOrientation: MomentPhotoOrientation {
         switch captureDraft?.source {
         case .photoLibrary:
-            return selectedPhotoOrientation
-        case .camera, .none:
+            if let captureDraft {
+                return targetPhotoOrientation(for: captureDraft.image)
+            }
+            return .portrait
+        case .camera:
+            return currentCameraCaptureOrientation
+        case .none:
             return .portrait
         }
+    }
+
+    private var currentCameraCaptureOrientation: MomentPhotoOrientation {
+        mode.album?.orientation ?? .portrait
+    }
+
+    private func targetPhotoOrientation(for image: UIImage) -> MomentPhotoOrientation {
+        mode.album?.orientation ?? .inferred(from: image.size)
     }
 
     private static func initialReminderSelection(for mode: MomentCreationMode) -> ReminderSelection {
@@ -1800,30 +1709,8 @@ struct CreationView: View {
         return ReminderSelection(value: 1, unit: .month)
     }
 
-    private static func initialAspect(for mode: MomentCreationMode) -> CameraCaptureAspect {
-        guard let album = mode.album else {
-            return .threeByFour
-        }
-
-        let latestMomentPhotoSize = mode.latestMoment.flatMap { moment in
-            ImageResourceService.imageSize(from: moment.photo)
-        }
-
-        return MomentPhotoLayoutResolver.initialAspect(
-            albumRatio: album.ratio,
-            latestMomentPhotoSize: latestMomentPhotoSize
-        )
-    }
-
-    private static func initialOrientation(for mode: MomentCreationMode) -> MomentPhotoOrientation {
-        let latestMomentPhotoSize = mode.latestMoment.flatMap { moment in
-            ImageResourceService.imageSize(from: moment.photo)
-        }
-
-        return MomentPhotoLayoutResolver.initialOrientation(
-            latestMomentPhotoOrientation: mode.latestMoment?.photoOrientation,
-            latestMomentPhotoSize: latestMomentPhotoSize
-        )
+    private static func targetAspectRatio(for orientation: MomentPhotoOrientation) -> CGFloat {
+        orientation.isLandscape ? 4 / 3 : 3 / 4
     }
 }
 
@@ -1840,7 +1727,7 @@ private enum MomentCreationPreviewSupport {
     }
 
     static func makeAlbumWithMoment(in container: ModelContainer) -> Album {
-        let album = Album(name: "Sunday Walk", ratio: .threeByFour)
+        let album = Album(name: "Sunday Walk", orientation: .portrait)
         container.mainContext.insert(album)
         container.mainContext.insert(Moment(
             album: album,

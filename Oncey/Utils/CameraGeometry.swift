@@ -279,8 +279,12 @@ enum CameraImageCropper {
     static let maximumOutputLongEdge: CGFloat = 4_096
 
     static func croppedImage(_ image: UIImage, aspect: CameraCaptureAspect) -> UIImage {
+        croppedImage(image, aspectRatio: aspect.aspectRatio)
+    }
+
+    static func croppedImage(_ image: UIImage, aspectRatio: CGFloat) -> UIImage {
         let normalizedImage = normalized(image)
-        let cropRect = CameraGeometry.cropRect(for: normalizedImage.size, aspect: aspect)
+        let cropRect = CameraGeometry.cropRect(for: normalizedImage.size, aspectRatio: aspectRatio)
 
         return croppedImage(normalizedImage, cropRect: cropRect)
     }

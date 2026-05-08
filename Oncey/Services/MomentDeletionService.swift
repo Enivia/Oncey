@@ -23,15 +23,17 @@ enum MomentDeletionService {
 
         var updatedAlbums = false
         var albumsToUnscheduleReminder: [Album] = []
-        for album in albumsToCheck where album.moments.isEmpty {
+        for album in albumsToCheck {
             var didUpdateAlbum = false
+            let previousOrientation = album.orientation
+            let resolvedOrientation = album.syncOrientation()
 
-            if album.ratio != nil {
-                album.ratio = nil
+            if previousOrientation != resolvedOrientation {
                 didUpdateAlbum = true
             }
 
-            if album.hasReminder,
+            if album.moments.isEmpty,
+               album.hasReminder,
                let remindValue = album.remindValue,
                let remindUnit = album.remindUnit {
                 AlbumReminderService.storeReminderConfiguration(
