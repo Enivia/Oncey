@@ -15,9 +15,6 @@ final class Album {
     var remindValue: Int?
     var remindUnit: AlbumReminderUnit?
     var remindAt: Date?
-    var templateOutlinePath: String?
-    var templatePhotoWidth: Double?
-    var templatePhotoHeight: Double?
     var createdAt: Date
     var updatedAt: Date
     @Relationship(deleteRule: .cascade, inverse: \Moment.album) var moments: [Moment]
@@ -29,9 +26,6 @@ final class Album {
         remindValue: Int? = nil,
         remindUnit: AlbumReminderUnit? = nil,
         remindAt: Date? = nil,
-        templateOutlinePath: String? = nil,
-        templatePhotoWidth: Double? = nil,
-        templatePhotoHeight: Double? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         moments: [Moment] = []
@@ -42,9 +36,6 @@ final class Album {
         self.remindValue = remindValue
         self.remindUnit = remindUnit
         self.remindAt = remindAt
-        self.templateOutlinePath = templateOutlinePath
-        self.templatePhotoWidth = templatePhotoWidth
-        self.templatePhotoHeight = templatePhotoHeight
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.moments = moments
@@ -58,22 +49,5 @@ extension Album {
 
     var hasReminder: Bool {
         hasReminderConfiguration && remindAt != nil
-    }
-
-    var templatePhotoSize: CGSize? {
-        guard let templatePhotoWidth, let templatePhotoHeight,
-              templatePhotoWidth > 0, templatePhotoHeight > 0 else {
-            return nil
-        }
-
-        return CGSize(width: templatePhotoWidth, height: templatePhotoHeight)
-    }
-
-    var templatePhotoAspectRatio: Double? {
-        guard let templatePhotoSize, templatePhotoSize.height > 0 else {
-            return nil
-        }
-
-        return templatePhotoSize.width / templatePhotoSize.height
     }
 }

@@ -18,7 +18,6 @@ struct AlbumDeletionServiceTests {
 
         let album = Album(
             name: "Cleanup Album",
-            templateOutlinePath: outlinePath,
             createdAt: createdAt,
             updatedAt: createdAt
         )

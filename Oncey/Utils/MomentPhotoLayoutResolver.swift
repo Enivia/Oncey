@@ -3,17 +3,10 @@ import CoreGraphics
 enum MomentPhotoLayoutResolver {
     static func initialAspect(
         albumRatio: CameraCaptureAspect?,
-        templatePhotoSize: CGSize?,
         latestMomentPhotoSize: CGSize?
     ) -> CameraCaptureAspect {
         if let albumRatio {
             return albumRatio
-        }
-
-        if let templatePhotoSize,
-           templatePhotoSize.width > 0,
-           templatePhotoSize.height > 0 {
-            return CameraCaptureAspect.closest(to: templatePhotoSize.width / templatePhotoSize.height)
         }
 
         if let latestMomentPhotoSize,
@@ -26,18 +19,11 @@ enum MomentPhotoLayoutResolver {
     }
 
     static func initialOrientation(
-        templatePhotoSize: CGSize?,
         latestMomentPhotoOrientation: MomentPhotoOrientation?,
         latestMomentPhotoSize: CGSize?
     ) -> MomentPhotoOrientation {
         if let latestMomentPhotoOrientation {
             return latestMomentPhotoOrientation
-        }
-
-        if let templatePhotoSize,
-           templatePhotoSize.width > 0,
-           templatePhotoSize.height > 0 {
-            return .inferred(from: templatePhotoSize)
         }
 
         if let latestMomentPhotoSize,

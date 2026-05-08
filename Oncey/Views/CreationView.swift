@@ -683,13 +683,14 @@ struct CreationView: View {
 
             if captureChrome.showsCaptureControls {
                 VStack(spacing: 0) {
-                    Spacer(minLength: 0)
+//                    Spacer(minLength: 0)
 
                     captureBottomBar
                         .padding(.horizontal, AppTheme.Spacing.s5)
                         .padding(.bottom, AppTheme.Spacing.s2)
                 }
                 .frame(width: layout.stageSize.width, height: layout.stageSize.height)
+                .zIndex(999)
             }
         }
         .frame(width: layout.stageSize.width, height: layout.stageSize.height)
@@ -1505,7 +1506,7 @@ struct CreationView: View {
         transitionSourceOpacity = 1
         transitionElementPhases[sourceStep] = TransitionStateResolver.settledPhases(for: sourceStep)
 
-        var destinationPhases = TransitionStateResolver.initialPhases(
+        let destinationPhases = TransitionStateResolver.initialPhases(
             for: destinationStep,
             route: plan.route
         )
@@ -1810,22 +1811,16 @@ struct CreationView: View {
 
         return MomentPhotoLayoutResolver.initialAspect(
             albumRatio: album.ratio,
-            templatePhotoSize: album.templatePhotoSize,
             latestMomentPhotoSize: latestMomentPhotoSize
         )
     }
 
     private static func initialOrientation(for mode: MomentCreationMode) -> MomentPhotoOrientation {
-        guard let album = mode.album else {
-            return .portrait
-        }
-
         let latestMomentPhotoSize = mode.latestMoment.flatMap { moment in
             ImageResourceService.imageSize(from: moment.photo)
         }
 
         return MomentPhotoLayoutResolver.initialOrientation(
-            templatePhotoSize: album.templatePhotoSize,
             latestMomentPhotoOrientation: mode.latestMoment?.photoOrientation,
             latestMomentPhotoSize: latestMomentPhotoSize
         )
